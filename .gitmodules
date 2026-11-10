@@ -1,0 +1,7 @@
+[submodule "Lib/glfw"]
+	path = Lib/glfw
+	url = https://github.com/glfw/glfw
+
+[submodule "Lib/mbedtls"]
+	path = Lib/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls

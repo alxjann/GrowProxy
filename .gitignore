@@ -1,0 +1,14 @@
+.vscode/*
+Tests/*
+
+Build/*
+!Build/*.bat
+!Build/*.sh
+
+Bin/*
+!Bin/*.bat
+!Bin/*.sh
+
+Build/Proxy
+
+UI/*
