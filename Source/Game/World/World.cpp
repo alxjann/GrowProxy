@@ -6,10 +6,23 @@
 #include "Utils/ByteReader.h"
 
 #include <algorithm>
+#include <cstring>
 
 namespace {
 
     constexpr int32 MAX_TILES = 255 * 255;
+
+    bool IsAreaLock(uint16 itemID) {
+        switch (itemID) {
+            case 202:  // Small Lock
+            case 204:  // Big Lock
+            case 206:  // Huge Lock
+            case 4994: // Builder's Lock
+                return true;
+            default:
+                return false;
+        }
+    }
 
     // Tiles of these items store an extra CBOR blob (uint32 size + bytes) after the tile.
     bool HasCborData(uint16 itemID) {
@@ -71,7 +84,11 @@ bool World::Load(const uint8* data, size_t size, const ItemDatabase& items) {
 
     m_tiles.resize(tileCount);
     for (uint32 i = 0; i < tileCount; ++i) {
-        if (!ReadTile(r, m_tiles[i], items)) {
+        TileAccess access;
+        bool hasAccess = false;
+        if (ReadTile(r, m_tiles[i], items, access, hasAccess)) {
+            StoreAccess(i, m_tiles[i], std::move(access), hasAccess, items);
+        } else {
             Log::Error("[World] Failed to read tile %u (%u, %u) of %s", i, i % m_width, i / m_width, m_name.c_str());
             Clear();
             return false;
@@ -116,11 +133,13 @@ void World::Clear() {
     m_width = m_height = 0;
     m_tiles.clear();
     m_droppedItems.clear();
+    m_access.clear();
+    m_worldLock = -1;
     m_lastDroppedUid = 0;
     m_baseWeather = m_weather = 0;
 }
 
-bool World::ReadTile(ByteReader& r, Tile& tile, const ItemDatabase& items) {
+bool World::ReadTile(ByteReader& r, Tile& tile, const ItemDatabase& items, TileAccess& access, bool& hasAccess) {
     r.Read(tile.foreground);
     r.Read(tile.background);
     r.Read(tile.parent);
@@ -143,7 +162,7 @@ bool World::ReadTile(ByteReader& r, Tile& tile, const ItemDatabase& items) {
         }
 
         tile.extraType = type;
-        SkipTileExtra(r, type, tile.foreground, m_version);
+        hasAccess = ReadTileExtra(r, type, tile.foreground, m_version, access);
     }
 
     if (HasCborData(tile.foreground))
@@ -159,11 +178,109 @@ bool World::UpdateTile(int32 x, int32 y, const uint8* data, size_t size, const I
 
     ByteReader r(data, size);
     Tile updated;
-    if (!ReadTile(r, updated, items))
+    TileAccess access;
+    bool hasAccess = false;
+    if (!ReadTile(r, updated, items, access, hasAccess))
         return false;
 
+    size_t index = (size_t)y * m_width + x;
+    if (tile->extraType == TILE_EXTRA_LOCK && updated.extraType != TILE_EXTRA_LOCK)
+        ReleaseLockArea(index);
+
+    // an update may leave out the protecting lock; keep the one we know
+    if (!updated.HasFlag(TILE_FLAG_HAS_PARENT) && tile->HasFlag(TILE_FLAG_HAS_PARENT)) {
+        updated.flags |= TILE_FLAG_HAS_PARENT;
+        updated.parent = tile->parent;
+    }
+
     *tile = updated;
+    StoreAccess(index, updated, std::move(access), hasAccess, items);
     return true;
+}
+
+void World::StoreAccess(size_t index, const Tile& tile, TileAccess&& access, bool hasAccess, const ItemDatabase& items) {
+    if (m_worldLock == (int32)index)
+        m_worldLock = -1;
+
+    if (!hasAccess) {
+        m_access.erase(index);
+        return;
+    }
+
+    m_access[index] = std::move(access);
+    const Item* item = items.Get(tile.foreground);
+    if (tile.extraType == TILE_EXTRA_LOCK && item && item->type == ITEM_TYPE_LOCK && !IsAreaLock(tile.foreground))
+        m_worldLock = (int32)index;
+}
+
+void World::ReleaseLockArea(size_t lockIndex) {
+    for (Tile& tile : m_tiles) {
+        if (tile.HasFlag(TILE_FLAG_HAS_PARENT) && tile.parent == lockIndex) {
+            tile.flags &= ~TILE_FLAG_HAS_PARENT;
+            tile.parent = 0;
+        }
+    }
+}
+
+void World::ClearForeground(int32 x, int32 y) {
+    Tile* tile = GetTile(x, y);
+    if (!tile)
+        return;
+
+    size_t index = (size_t)y * m_width + x;
+    if (tile->extraType == TILE_EXTRA_LOCK)
+        ReleaseLockArea(index);
+
+    tile->foreground = 0;
+    tile->flags &= ~TILE_FLAG_HAS_EXTRA_DATA;
+    tile->extraType = TILE_EXTRA_NONE;
+    m_access.erase(index);
+    if (m_worldLock == (int32)index)
+        m_worldLock = -1;
+}
+
+void World::SetLockArea(int32 x, int32 y, const uint8* indices, size_t size) {
+    if (!GetTile(x, y))
+        return;
+
+    size_t lockIndex = (size_t)y * m_width + x;
+    ReleaseLockArea(lockIndex);
+
+    for (size_t i = 0; i + 2 <= size; i += 2) {
+        uint16 index;
+        std::memcpy(&index, indices + i, 2);
+        if (index >= m_tiles.size() || index == lockIndex)
+            continue;
+        m_tiles[index].flags |= TILE_FLAG_HAS_PARENT;
+        m_tiles[index].parent = (uint16)lockIndex;
+    }
+}
+
+const TileAccess* World::GetAccess(int32 x, int32 y) const {
+    if (!GetTile(x, y))
+        return nullptr;
+    auto it = m_access.find((size_t)y * m_width + x);
+    return it != m_access.end() ? &it->second : nullptr;
+}
+
+bool World::HasAccess(int32 x, int32 y, int32 userID) const {
+    const Tile* tile = GetTile(x, y);
+    if (!tile)
+        return false;
+
+    int32 lockIndex = tile->HasFlag(TILE_FLAG_HAS_PARENT) ? tile->parent : m_worldLock;
+    if (lockIndex < 0)
+        return true;
+
+    auto lock = m_access.find((size_t)lockIndex);
+    if (lock == m_access.end() || (size_t)lockIndex >= m_tiles.size())
+        return false;
+
+    if (m_tiles[lockIndex].HasFlag(TILE_FLAG_IS_OPEN_TO_PUBLIC) || lock->second.Allows(userID))
+        return true;
+
+    auto worldLock = m_worldLock >= 0 ? m_access.find((size_t)m_worldLock) : m_access.end();
+    return worldLock != m_access.end() && userID > 0 && worldLock->second.owner == userID;
 }
 
 Tile* World::GetTile(int32 x, int32 y) {

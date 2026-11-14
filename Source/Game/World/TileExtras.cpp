@@ -2,6 +2,8 @@
 
 #include "Game/Items/Items.h"
 
+#include <algorithm>
+
 namespace {
 
     // Items whose tile extra layout differs from the rest of their type.
@@ -20,6 +22,18 @@ namespace {
     // uint32 count followed by count elements of elementSize bytes.
     void SkipList(ByteReader& r, size_t elementSize) {
         r.Skip(r.Read<uint32>() * elementSize);
+    }
+
+    // uint32 count followed by that many user ids.
+    void ReadUserList(ByteReader& r, std::vector<int32>& out) {
+        uint32 count = r.Read<uint32>();
+        if (count > r.Remaining() / 4) {
+            r.Skip(count * 4); // fails the reader
+            return;
+        }
+        out.resize(count);
+        for (int32& id : out)
+            r.Read(id);
     }
 
 }
@@ -197,7 +211,11 @@ uint8 GetTileExtraTypeForItem(int32 itemID, uint8 itemType) {
     }
 }
 
-void SkipTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion) {
+bool TileAccess::Allows(int32 userID) const {
+    return userID > 0 && (owner == userID || std::find(allowed.begin(), allowed.end(), userID) != allowed.end());
+}
+
+bool ReadTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion, TileAccess& access) {
     r.Skip(1); // type byte
 
     switch (type) {
@@ -212,15 +230,16 @@ void SkipTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion) {
             break;
 
         case TILE_EXTRA_LOCK:
-            r.Skip(1 + 4);  // flags, owner user id
-            SkipList(r, 4); // access list
+            r.Skip(1); // flags
+            r.Read(access.owner);
+            ReadUserList(r, access.allowed);
             if (worldVersion > 11)
                 r.Skip(4); // minimum entry level
             if (worldVersion > 12)
                 r.Skip(4); // world timer
             if (fg == ITEM_GUILD_LOCK)
                 r.Skip(16);
-            break;
+            return true;
 
         case TILE_EXTRA_SEED:
             r.Skip(4 + 1); // grow time, fruit count
@@ -360,9 +379,10 @@ void SkipTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion) {
             break;
 
         case TILE_EXTRA_VIP_DOOR:
-            r.Skip(1 + 4);  // flags, owner
-            SkipList(r, 4); // access list
-            break;
+            r.Skip(1); // flags
+            r.Read(access.owner);
+            ReadUserList(r, access.allowed);
+            return true;
 
         case TILE_EXTRA_FISH_MOUNT:
             r.SkipString();
@@ -455,13 +475,21 @@ void SkipTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion) {
             break;
 
         case TILE_EXTRA_FRIENDS_ENTRANCE: {
-            r.Skip(4 + 2); // owner, unknown
-            uint16 allowed = r.Read<uint16>();
-            r.Skip(allowed * 4);
-            break;
+            r.Read(access.owner);
+            r.Skip(2); // unknown
+            uint16 count = r.Read<uint16>();
+            if (count > r.Remaining() / 4) {
+                r.Skip(count * 4u); // fails the reader
+                return false;
+            }
+            access.allowed.resize(count);
+            for (int32& id : access.allowed)
+                r.Read(id);
+            return true;
         }
 
         default:
             break;
     }
+    return false;
 }

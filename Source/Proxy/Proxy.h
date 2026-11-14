@@ -76,6 +76,7 @@ private:
     void CloseServerConnection();
     void DisconnectClient();
     void RunDueTasks();
+    void UpdateLongPunch();
 
     const ServerData& m_serverData;
     GameState m_state;

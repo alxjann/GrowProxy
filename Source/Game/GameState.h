@@ -22,6 +22,7 @@ struct GameState {
         local.netID = -1;
         local.userID = -1;
         local.name.clear();
+        local.longPunchActive = false; // a new world resets the client's character state
     }
 
     // Leaving a world (or quitting) invalidates everything world related.

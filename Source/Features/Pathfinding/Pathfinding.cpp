@@ -14,30 +14,79 @@ namespace {
     constexpr int32 WALK_STATE_ITEM = 6326;
     constexpr uint32 WALK_STATE_FLAGS = 32 | 128 | (1 << 10) | (1 << 11);
 
-    // Whether the player can stand in a tile.
-    bool IsBlocked(const Tile& tile, int32 y, const ItemDatabase& items, int32 playerTileY) {
+    enum TileRule : uint8 {
+        RULE_OPEN,       // from anywhere
+        RULE_BLOCKED,    // never
+        RULE_NOT_DOWN,   // platform: solid from above, so not by moving down into it
+        RULE_NOT_UP,     // solid from below, so not by moving up into it
+        RULE_RIGHT_ONLY, // one-way block facing right
+        RULE_LEFT_ONLY,  // one-way block facing left (flipped)
+    };
+
+    bool CanUseEntrance(const World& world, const Tile& tile, int32 x, int32 y, int32 userID) {
+        if (tile.HasFlag(TILE_FLAG_IS_OPEN_TO_PUBLIC))
+            return true;
+
+        const TileAccess* own = world.GetAccess(x, y);
+        if (own && own->Allows(userID))
+            return true;
+
+        return world.HasAccess(x, y, userID);
+    }
+
+    TileRule GetTileRule(const World& world, const ItemDatabase& items, int32 x, int32 y, int32 userID) {
+        const Tile& tile = *world.GetTile(x, y);
+        if (tile.foreground == 0)
+            return RULE_OPEN;
+
         const Item* item = items.Get(tile.foreground);
-        switch (item ? item->collisionType : COLLISION_NONE) {
+        if (!item)
+            return RULE_BLOCKED;
+
+        if (item->type == ITEM_TYPE_VIP_DOOR || item->type == ITEM_TYPE_FRIENDS_ENTRANCE)
+            return CanUseEntrance(world, tile, x, y, userID) ? RULE_OPEN : RULE_BLOCKED;
+
+        switch (item->collisionType) {
             case COLLISION_NONE:
-                return false;
+                return RULE_OPEN;
             case COLLISION_SOLID:
-                return true;
+                return RULE_BLOCKED;
             case COLLISION_JUMP_THROUGH:
-                return playerTileY <= y;
+                return RULE_NOT_DOWN;
             case COLLISION_GATEWAY:
-                return tile.flags != 34 && tile.flags != 128; // open doors/entrances
+            case COLLISION_VIP:
+                return CanUseEntrance(world, tile, x, y, userID) ? RULE_OPEN : RULE_BLOCKED;
             case COLLISION_IF_OFF:
-                return !tile.HasFlag(TILE_FLAG_IS_ON) && tile.flags != 80;
+                return tile.HasFlag(TILE_FLAG_IS_ON) ? RULE_OPEN : RULE_BLOCKED;
+            case COLLISION_ONE_WAY:
+                return tile.HasFlag(TILE_FLAG_FLIPPED_X) ? RULE_LEFT_ONLY : RULE_RIGHT_ONLY;
             case COLLISION_JUMP_DOWN:
-                return playerTileY >= y;
+                return RULE_NOT_UP;
             default:
-                return tile.foreground != 0;
+                return RULE_BLOCKED;
+        }
+    }
+
+    bool CanEnter(TileRule rule, Vec2i d) {
+        switch (rule) {
+            case RULE_OPEN:
+                return true;
+            case RULE_NOT_DOWN:
+                return d.y <= 0;
+            case RULE_NOT_UP:
+                return d.y >= 0;
+            case RULE_RIGHT_ONLY:
+                return d.x > 0;
+            case RULE_LEFT_ONLY:
+                return d.x < 0;
+            default:
+                return false;
         }
     }
 
 }
 
-std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i start, Vec2i goal, int32 playerTileY) {
+std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i start, Vec2i goal, int32 userID) {
     const int32 width = world.GetWidth();
     const int32 height = world.GetHeight();
     auto inside = [&](Vec2i p) { return p.x >= 0 && p.y >= 0 && p.x < width && p.y < height; };
@@ -46,10 +95,10 @@ std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i
     if (!inside(start) || !inside(goal))
         return {};
 
-    std::vector<bool> blocked(world.GetTiles().size());
+    std::vector<TileRule> rules(world.GetTiles().size());
     for (int32 y = 0; y < height; ++y) {
         for (int32 x = 0; x < width; ++x)
-            blocked[index({x, y})] = IsBlocked(*world.GetTile(x, y), y, items, playerTileY);
+            rules[index({x, y})] = GetTileRule(world, items, x, y, userID);
     }
 
     // A* with Manhattan distance
@@ -61,8 +110,8 @@ std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i
     };
     auto estimate = [&](Vec2i p) { return std::abs(goal.x - p.x) + std::abs(goal.y - p.y); };
 
-    std::vector<int32> distance(blocked.size(), INT32_MAX);
-    std::vector<int32> cameFrom(blocked.size(), -1);
+    std::vector<int32> distance(rules.size(), INT32_MAX);
+    std::vector<int32> cameFrom(rules.size(), -1);
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> open;
 
     distance[index(start)] = 0;
@@ -86,7 +135,7 @@ std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i
 
         for (Vec2i d : directions) {
             Vec2i next{current.pos.x + d.x, current.pos.y + d.y};
-            if (!inside(next) || blocked[index(next)] || current.distance + 1 >= distance[index(next)])
+            if (!inside(next) || !CanEnter(rules[index(next)], d) || current.distance + 1 >= distance[index(next)])
                 continue;
 
             distance[index(next)] = current.distance + 1;
@@ -112,7 +161,7 @@ void WalkTo(Proxy& proxy, Vec2i goal) {
     start.x = std::clamp(start.x, 0, world.GetWidth() - 1);
     start.y = std::clamp(start.y, 0, world.GetHeight() - 1);
 
-    std::vector<Vec2i> path = FindPath(world, state.items, start, goal, start.y);
+    std::vector<Vec2i> path = FindPath(world, state.items, start, goal, state.local.userID);
     if (path.empty()) {
         proxy.TextOverlay("`4Path Not Found");
         return;

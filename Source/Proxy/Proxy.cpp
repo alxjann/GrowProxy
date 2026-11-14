@@ -248,9 +248,7 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                 // a tile change to the fist (18) means the tile was destroyed: the foreground goes first, then the
                 // background
                 if (tile->foreground != 0) {
-                    tile->foreground = 0;
-                    tile->flags &= ~TILE_FLAG_HAS_EXTRA_DATA;
-                    tile->extraType = TILE_EXTRA_NONE;
+                    m_state.world.ClearForeground(game.tileX, game.tileY);
                 } else {
                     tile->background = 0;
                 }
@@ -268,6 +266,13 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
         case PACKET_SEND_TILE_UPDATE_DATA: {
             if (extra)
                 m_state.world.UpdateTile(game.tileX, game.tileY, extra, game.extraDataSize, m_state.items);
+            break;
+        }
+
+        // a lock at (tileX, tileY) claimed an area; the extra data lists the tile indices (uint16 each)
+        case PACKET_SEND_LOCK: {
+            if (extra)
+                m_state.world.SetLockArea(game.tileX, game.tileY, extra, game.extraDataSize);
             break;
         }
 
@@ -334,15 +339,11 @@ bool Proxy::OnPacketFromClient(const PacketView& packet) {
         return true;
 
     switch (game.type) {
-        // Holding left shift gives long punch; shift + left click walks to the clicked tile.
         case PACKET_STATE: {
             m_state.local.pos = game.pos;
 
-            bool shiftDown = Platform::IsKeyDown(VK_LSHIFT);
-            if (shiftDown != m_state.local.longPunchActive)
-                Send(Client, m_state.local.SetLongPunch(shiftDown));
-
-            if (shiftDown && Platform::IsKeyDown(VK_LBUTTON)) {
+            UpdateLongPunch();
+            if (m_state.local.longPunchActive && Platform::IsKeyDown(VK_LBUTTON)) {
                 WalkTo(*this, {game.tileX, game.tileY});
                 return false;
             }
@@ -410,7 +411,18 @@ void Proxy::Poll(uint32 timeoutMs) {
         DisconnectClient();
     }
 
+    UpdateLongPunch();
     RunDueTasks();
+}
+
+void Proxy::UpdateLongPunch() {
+    LocalPlayer& local = m_state.local;
+    if (!m_client || !m_state.world.IsLoaded() || local.netID == -1)
+        return;
+
+    bool shiftDown = Platform::IsKeyDown(VK_LSHIFT);
+    if (shiftDown != local.longPunchActive)
+        Send(Client, local.SetLongPunch(shiftDown));
 }
 
 void Proxy::HandleClientEvent(ENetEvent& event) {

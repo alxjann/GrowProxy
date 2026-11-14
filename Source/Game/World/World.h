@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Core/Types.h"
+#include "Game/World/TileExtras.h"
 
+#include <unordered_map>
 #include <vector>
 
 class ByteReader;
@@ -53,6 +55,19 @@ public:
     // Replaces one tile from a SEND_TILE_UPDATE_DATA payload.
     bool UpdateTile(int32 x, int32 y, const uint8* data, size_t size, const ItemDatabase& items);
 
+    // The foreground of a tile was destroyed (with its extra data and, for locks, the area it protected).
+    void ClearForeground(int32 x, int32 y);
+
+    // SEND_LOCK: the lock at (x, y) now protects the given tiles (uint16 tile indices).
+    void SetLockArea(int32 x, int32 y, const uint8* indices, size_t size);
+
+    // Owner/allowed list stored in a tile's own extra (lock, VIP entrance, friends entrance), or null.
+    const TileAccess* GetAccess(int32 x, int32 y) const;
+
+    // Whether a user has access to a tile: the lock protecting it (its area lock, else the world lock) is
+    // public, owned by them or lists them. Tiles that no lock protects are open to everyone.
+    bool HasAccess(int32 x, int32 y, int32 userID) const;
+
     bool IsLoaded() const { return m_loaded; }
     const string& GetName() const { return m_name; }
     uint16 GetVersion() const { return m_version; }
@@ -72,7 +87,9 @@ public:
     void RemoveDroppedItem(uint32 uid);
 
 private:
-    bool ReadTile(ByteReader& reader, Tile& tile, const ItemDatabase& items);
+    bool ReadTile(ByteReader& reader, Tile& tile, const ItemDatabase& items, TileAccess& access, bool& hasAccess);
+    void StoreAccess(size_t index, const Tile& tile, TileAccess&& access, bool hasAccess, const ItemDatabase& items);
+    void ReleaseLockArea(size_t lockIndex);
 
     bool m_loaded = false;
     uint16 m_version = 0;
@@ -81,6 +98,8 @@ private:
     int32 m_height = 0;
     std::vector<Tile> m_tiles;
     std::vector<DroppedItem> m_droppedItems;
+    std::unordered_map<size_t, TileAccess> m_access; // by tile index
+    int32 m_worldLock = -1;                           // tile index of the world lock, -1 if none
     uint32 m_lastDroppedUid = 0;
     uint16 m_baseWeather = 0;
     uint16 m_weather = 0;

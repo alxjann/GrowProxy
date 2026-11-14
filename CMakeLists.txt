@@ -71,10 +71,15 @@ set_target_properties(Proxy PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/Bin"
 )
 
-# Parser regression check against dumps from known-good data (see Tests/ParserTests.cpp).
-add_executable(ParserTests ${CMAKE_CURRENT_LIST_DIR}/Tests/ParserTests.cpp)
-target_link_libraries(ParserTests PRIVATE ProxyCore)
+# Tests are local only (Tests/ is git-ignored); build them when the folder is present.
+if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/Tests/ParserTests.cpp)
+    # Parser regression check against dumps from known-good data (see Tests/ParserTests.cpp).
+    add_executable(ParserTests ${CMAKE_CURRENT_LIST_DIR}/Tests/ParserTests.cpp)
+    target_link_libraries(ParserTests PRIVATE ProxyCore)
+endif()
 
-# Unit checks and an end-to-end proxy test over localhost ENet (see Tests/ProxyTests.cpp).
-add_executable(ProxyTests ${CMAKE_CURRENT_LIST_DIR}/Tests/ProxyTests.cpp)
-target_link_libraries(ProxyTests PRIVATE ProxyCore)
+if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/Tests/ProxyTests.cpp)
+    # Unit checks and an end-to-end proxy test over localhost ENet (see Tests/ProxyTests.cpp).
+    add_executable(ProxyTests ${CMAKE_CURRENT_LIST_DIR}/Tests/ProxyTests.cpp)
+    target_link_libraries(ProxyTests PRIVATE ProxyCore)
+endif()
