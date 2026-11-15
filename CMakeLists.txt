@@ -45,10 +45,28 @@ set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
 set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
 add_subdirectory(${LIB_ROOT}/mbedtls)
 
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(${LIB_ROOT}/glfw)
+
+add_library(imgui STATIC
+    ${LIB_ROOT}/imgui/imgui.cpp
+    ${LIB_ROOT}/imgui/imgui_demo.cpp
+    ${LIB_ROOT}/imgui/imgui_draw.cpp
+    ${LIB_ROOT}/imgui/imgui_tables.cpp
+    ${LIB_ROOT}/imgui/imgui_widgets.cpp
+    ${LIB_ROOT}/imgui/imgui_impl_glfw.cpp
+    ${LIB_ROOT}/imgui/imgui_impl_opengl3.cpp
+)
+target_include_directories(imgui PUBLIC ${LIB_ROOT}/imgui)
+target_compile_definitions(imgui PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+target_link_libraries(imgui PUBLIC glfw opengl32)
+
 # --- proxy ------------------------------------------------------------------
 
-# Everything except the entry point, shared by the proxy and the tests.
-# Source/UI is not built: the proxy currently runs as a console application.
+# Everything except the entry point and the UI, shared by the proxy and the tests.
 file(GLOB_RECURSE PROXY_CORE_SOURCES CONFIGURE_DEPENDS
     ${SOURCE_ROOT}/Core/*.cpp
     ${SOURCE_ROOT}/Packets/*.cpp
@@ -64,8 +82,16 @@ target_include_directories(ProxyCore PUBLIC ${SOURCE_ROOT})
 target_compile_definitions(ProxyCore PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(ProxyCore PUBLIC enet zlib mbedtls mbedx509 mbedcrypto winhttp)
 
-add_executable(Proxy ${SOURCE_ROOT}/Main.cpp)
-target_link_libraries(Proxy PRIVATE ProxyCore)
+# Dear ImGui front end (GLFW + OpenGL 3). The executable is a windowed app; --headless runs it in a console.
+file(GLOB_RECURSE PROXY_UI_SOURCES CONFIGURE_DEPENDS ${SOURCE_ROOT}/UI/*.cpp)
+
+add_executable(Proxy WIN32 ${SOURCE_ROOT}/Main.cpp ${PROXY_UI_SOURCES})
+target_link_libraries(Proxy PRIVATE ProxyCore imgui dwmapi)
+if(MSVC)
+    # keep main() as the entry point of the WIN32 subsystem executable; /bigobj for the embedded fonts
+    target_link_options(Proxy PRIVATE /ENTRY:mainCRTStartup)
+    target_compile_options(Proxy PRIVATE /bigobj /utf-8)
+endif()
 set_target_properties(Proxy PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/Bin"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/Bin"

@@ -32,9 +32,7 @@ Requirements: **Windows**, **Visual Studio 2022**, and **CMake 3.20+**.
 Run `Build/compile.bat`, or manually type:
 
 ```
-cd Build
-cmake -S .. -B Proxy
-cmake --build Proxy --config Release
+cmake --build Build\Proxy --config Release --target Proxy
 ```
 
 | Output      | Location |
@@ -55,7 +53,7 @@ cmake --build Proxy --config Release
 127.0.0.1 growtopia2.com
 ```
 
-2. Run `Bin/Proxy.exe` and start Growtopia.
+2. Run `Bin/Proxy.exe` or .\Bin\Proxy.exe and start Growtopia.
 3. Press **Ctrl+C** in the console to stop the proxy. Remove the hosts lines to play without it.
 
 ---

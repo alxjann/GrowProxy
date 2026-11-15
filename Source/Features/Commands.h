@@ -14,11 +14,13 @@ public:
     bool HandleChat(string_view text);
     bool HandleDialogReturn(const TextPacket& packet);
 
-private:
+    // Actions behind the commands, also used by the UI.
     bool Warp(string_view world);
-    void Growscan();
     void ToggleAntigravity();
+    void PointToItem(int32 itemID); // shows the client's arrow pointing at a dropped item
 
+private:
+    void Growscan(); // opens the growscan dialog in the game
     void ShowWorldBlocks();
     void ShowDroppedItems();
 

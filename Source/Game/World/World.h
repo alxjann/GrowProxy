@@ -82,6 +82,7 @@ public:
     const std::vector<Tile>& GetTiles() const { return m_tiles; }
 
     std::vector<DroppedItem>& GetDroppedItems() { return m_droppedItems; }
+    const std::vector<DroppedItem>& GetDroppedItems() const { return m_droppedItems; }
     void AddDroppedItem(uint16 itemID, uint8 count, Vec2f pos, uint8 flags);
     void ModifyDroppedItem(uint32 uid, uint16 itemID, uint8 count, Vec2f pos, uint8 flags);
     void RemoveDroppedItem(uint32 uid);

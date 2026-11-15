@@ -118,6 +118,17 @@ void Commands::ToggleAntigravity() {
     });
 }
 
+void Commands::PointToItem(int32 itemID) {
+    if (itemID <= 0)
+        return;
+
+    GameUpdatePacket arrow;
+    arrow.type = PACKET_ACTIVE_ARROW_TO_ITEM;
+    arrow.byte1 = 1;
+    arrow.netID = itemID;
+    m_proxy.Send(Client, arrow);
+}
+
 bool Commands::HandleDialogReturn(const TextPacket& packet) {
     string_view button = packet.Get("buttonClicked");
 
@@ -133,14 +144,7 @@ bool Commands::HandleDialogReturn(const TextPacket& packet) {
     // item buttons in the floating items list: point the arrow at the item
     for (string_view prefix : {string_view("floating_"), string_view("findObject_")}) {
         if (Strings::StartsWith(button, prefix)) {
-            int32 itemID = Strings::ToInt(button.substr(prefix.size())).value_or(0);
-            if (itemID > 0) {
-                GameUpdatePacket arrow;
-                arrow.type = PACKET_ACTIVE_ARROW_TO_ITEM;
-                arrow.byte1 = 1;
-                arrow.netID = itemID;
-                m_proxy.Send(Client, arrow);
-            }
+            PointToItem(Strings::ToInt(button.substr(prefix.size())).value_or(0));
             return true;
         }
     }

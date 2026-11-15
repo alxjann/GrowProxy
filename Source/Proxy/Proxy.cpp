@@ -13,6 +13,8 @@
 #include <enet/enet.h>
 #include <windows.h>
 
+#include <algorithm>
+
 constexpr size_t CHANNELS = 2;
 constexpr size_t MAX_CLIENTS = 32;
 
@@ -24,25 +26,47 @@ Proxy::~Proxy() {
 
 // Sending
 
-void Proxy::SendPacket(Target target, const uint8* data, size_t size, uint8 channel, uint32 flags) {
+bool Proxy::SendPacket(Target target, const uint8* data, size_t size, uint8 channel, uint32 flags) {
     // the server only gets packets once the connection is up
     ENetPeer* peer = target == Client ? m_client : (m_serverConnected ? m_server : nullptr);
     if (!peer)
-        return;
+        return false;
 
     ENetPacket* packet = enet_packet_create(data, size, flags);
-    if (packet && enet_peer_send(peer, channel, packet) != 0)
+    if (!packet)
+        return false;
+
+    if (enet_peer_send(peer, channel, packet) != 0) {
         enet_packet_destroy(packet);
+        return false;
+    }
+    return true;
+}
+
+void Proxy::SendOwnPacket(Target target, const std::vector<uint8>& data) {
+    bool sent = SendPacket(target, data.data(), data.size(), 0, ENET_PACKET_FLAG_RELIABLE);
+    Notify(target, true, !sent, data.data(), data.size());
+}
+
+void Proxy::Notify(Target to, bool fromProxy, bool blocked, const uint8* data, size_t size) {
+    if (!m_observer)
+        return;
+
+    PacketEvent event;
+    event.to = to;
+    event.fromProxy = fromProxy;
+    event.blocked = blocked;
+    event.data = data;
+    event.size = size;
+    m_observer(event);
 }
 
 void Proxy::Send(Target target, const GameUpdatePacket& packet, const void* extraData, uint32 extraSize) {
-    std::vector<uint8> data = MakeGamePacket(packet, extraData, extraSize);
-    SendPacket(target, data.data(), data.size(), 0, ENET_PACKET_FLAG_RELIABLE);
+    SendOwnPacket(target, MakeGamePacket(packet, extraData, extraSize));
 }
 
 void Proxy::Send(Target target, MessageType type, string_view text) {
-    std::vector<uint8> data = MakeTextPacket(type, text);
-    SendPacket(target, data.data(), data.size(), 0, ENET_PACKET_FLAG_RELIABLE);
+    SendOwnPacket(target, MakeTextPacket(type, text));
 }
 
 void Proxy::Send(Target target, const VariantList& call, int32 netID, uint32 delayMs) {
@@ -168,7 +192,7 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                         m_state.players[player.netID] = player;
                     }
 
-                    if (!isLocal)
+                    if (!isLocal || !m_settings.infiniteZoom)
                         return true;
 
                     size_t pos = spawnData.find("mstate|");
@@ -343,7 +367,7 @@ bool Proxy::OnPacketFromClient(const PacketView& packet) {
             m_state.local.pos = game.pos;
 
             UpdateLongPunch();
-            if (m_state.local.longPunchActive && Platform::IsKeyDown(VK_LBUTTON)) {
+            if (m_settings.longPunch && m_state.local.longPunchActive && Platform::IsKeyDown(VK_LBUTTON)) {
                 WalkTo(*this, {game.tileX, game.tileY});
                 return false;
             }
@@ -352,7 +376,7 @@ bool Proxy::OnPacketFromClient(const PacketView& packet) {
 
         // shift + punch/place belongs to long punch and pathfinding, not to the game
         case PACKET_TILE_CHANGE_REQUEST:
-            return !Platform::IsKeyDown(VK_SHIFT);
+            return !(m_settings.longPunch && Platform::IsKeyDown(VK_SHIFT));
 
         default:
             return true;
@@ -415,14 +439,51 @@ void Proxy::Poll(uint32 timeoutMs) {
     RunDueTasks();
 }
 
+void Proxy::WaitForTraffic(uint32 timeoutMs) const {
+    ENetSocketSet readSet;
+    ENET_SOCKETSET_EMPTY(readSet);
+
+    ENetSocket highest = 0;
+    bool any = false;
+    for (const ENetHost* host : {m_clientHost, m_serverHost}) {
+        if (!host)
+            continue;
+        ENET_SOCKETSET_ADD(readSet, host->socket);
+        highest = std::max(highest, host->socket);
+        any = true;
+    }
+
+    if (!any) {
+        Sleep(timeoutMs);
+        return;
+    }
+    enet_socketset_select(highest, &readSet, nullptr, timeoutMs);
+}
+
+void Proxy::Disconnect() {
+    // Runs as a task so the hosts are only ever destroyed on the thread calling Poll(): WaitForTraffic() reads
+    // them there without holding the lock.
+    Schedule(0, [this]() {
+        Log::Info("[Proxy] Disconnecting the client and the game server");
+        m_redirecting = false;
+        CloseServerConnection();
+        DisconnectClient();
+        m_state.LeaveWorld(true);
+    });
+}
+
+uint32 Proxy::GetServerPing() const {
+    return m_server && m_serverConnected ? m_server->roundTripTime : 0;
+}
+
 void Proxy::UpdateLongPunch() {
     LocalPlayer& local = m_state.local;
     if (!m_client || !m_state.world.IsLoaded() || local.netID == -1)
         return;
 
-    bool shiftDown = Platform::IsKeyDown(VK_LSHIFT);
-    if (shiftDown != local.longPunchActive)
-        Send(Client, local.SetLongPunch(shiftDown));
+    bool wanted = m_settings.longPunch && Platform::IsKeyDown(VK_LSHIFT);
+    if (wanted != local.longPunchActive)
+        Send(Client, local.SetLongPunch(wanted));
 }
 
 void Proxy::HandleClientEvent(ENetEvent& event) {
@@ -448,13 +509,14 @@ void Proxy::HandleClientEvent(ENetEvent& event) {
         case ENET_EVENT_TYPE_RECEIVE: {
             if (event.peer == m_client) {
                 PacketView view{event.packet->data, event.packet->dataLength};
-                if (OnPacketFromClient(view)) {
-                    if (m_server && m_serverConnected)
-                        SendPacket(Server, view.data, view.size, event.channelID, event.packet->flags);
-                    else if (m_server)
-                        m_pendingToServer.push_back({std::vector<uint8>(view.data, view.data + view.size),
-                                                     event.channelID, event.packet->flags});
-                }
+                bool forward = OnPacketFromClient(view) && m_server;
+                Notify(Server, false, !forward, view.data, view.size);
+
+                if (forward && m_serverConnected)
+                    SendPacket(Server, view.data, view.size, event.channelID, event.packet->flags);
+                else if (forward)
+                    m_pendingToServer.push_back(
+                        {std::vector<uint8>(view.data, view.data + view.size), event.channelID, event.packet->flags});
             }
             enet_packet_destroy(event.packet);
             break;
@@ -493,7 +555,10 @@ void Proxy::HandleServerEvent(ENetEvent& event) {
 
         case ENET_EVENT_TYPE_RECEIVE: {
             PacketView view{event.packet->data, event.packet->dataLength};
-            if (OnPacketFromServer(view))
+            bool forward = OnPacketFromServer(view);
+            Notify(Client, false, !forward, view.data, view.size);
+
+            if (forward)
                 SendPacket(Client, view.data, view.size, event.channelID, event.packet->flags);
             enet_packet_destroy(event.packet);
             break;
@@ -546,6 +611,7 @@ void Proxy::ConnectToServer(const Endpoint& server) {
 
     m_server = enet_host_connect(m_serverHost, &address, CHANNELS, 0);
     m_serverConnected = false;
+    m_serverEndpoint = server;
     m_connectStartedMs = Platform::NowMs();
     if (!m_server)
         DisconnectClient();
