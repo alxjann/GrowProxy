@@ -26,7 +26,7 @@ Proxy::~Proxy() {
 
 // Sending
 
-bool Proxy::SendPacket(Target target, const uint8* data, size_t size, uint8 channel, uint32 flags) {
+bool Proxy::SendPacket(Target target, const uint8* data, size_t size, int channel, int flags) {
     // the server only gets packets once the connection is up
     ENetPeer* peer = target == Client ? m_client : (m_serverConnected ? m_server : nullptr);
     if (!peer)
@@ -69,14 +69,14 @@ void Proxy::Send(Target target, MessageType type, string_view text) {
     SendOwnPacket(target, MakeTextPacket(type, text));
 }
 
-void Proxy::Send(Target target, const VariantList& call, int32 netID, uint32 delayMs) {
+void Proxy::Send(Target target, const VariantList& call, int netID, int delayMs) {
     GameUpdatePacket packet;
     packet.type = PACKET_CALL_FUNCTION;
     packet.netID = netID;
-    packet.value = (int32)delayMs;
+    packet.value = delayMs;
 
     std::vector<uint8> data = call.Serialize();
-    Send(target, packet, data.data(), (uint32)data.size());
+    Send(target, packet, data.data(), data.size());
 }
 
 void Proxy::ConsoleMessage(const string& text) {
@@ -127,20 +127,20 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                     if (call.Size() < 5)
                         return true;
 
-                    uint16 port = (uint16)call.GetInt(1);
+                    int port = call.GetInt(1);
                     string address = call.GetString(4); // "ip|doorID|uuid"; only the ip is replaced
                     size_t bar = address.find('|');
                     string ip = address.substr(0, bar);
                     string rest = bar != string::npos ? address.substr(bar) : "";
 
-                    Log::Info("[Proxy] Server is moving the client to %s:%u", ip.c_str(), port);
+                    Log::Info("[Proxy] Server is moving the client to %s:%d", ip.c_str(), port);
                     RedirectNextConnection({ip, port});
 
-                    call[1] = (int32)Config::LOCAL_ENET_PORT;
+                    call[1] = Config::LOCAL_ENET_PORT;
                     call[4] = Config::LOCAL_HOST + rest;
 
                     std::vector<uint8> data = call.Serialize();
-                    Send(Client, game, data.data(), (uint32)data.size());
+                    Send(Client, game, data.data(), data.size());
                     return false;
                 }
 
@@ -159,10 +159,10 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
 
                     Log::Info("[Items] items.dat changed (hash %u), making the client download it", serverHash);
                     m_state.items.SetHash(serverHash);
-                    call[1] = (uint32)0;
+                    call[1] = 0; // unsigned: the client expects a uint here
 
                     std::vector<uint8> data = call.Serialize();
-                    Send(Client, game, data.data(), (uint32)data.size());
+                    Send(Client, game, data.data(), data.size());
                     return false;
                 }
 
@@ -203,13 +203,13 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                     call[1] = spawnData;
 
                     std::vector<uint8> data = call.Serialize();
-                    Send(Client, game, data.data(), (uint32)data.size());
+                    Send(Client, game, data.data(), data.size());
                     return false;
                 }
 
                 case "OnRemove"_hash: {
                     TextPacket remove(call.GetString(1));
-                    int32 netID = Strings::ToInt(remove.Get("netID")).value_or(-1);
+                    int netID = Strings::ToInt(remove.Get("netID")).value_or(-1);
                     if (netID == -1)
                         return true;
 
@@ -235,7 +235,7 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
             const uint8* data = extra;
             size_t size = game.extraDataSize;
             if (game.value != 0) {
-                if (!Zlib::Inflate(extra, size, (size_t)game.value, inflated)) {
+                if (!Zlib::Inflate(extra, size, game.value, inflated)) {
                     Log::Error("[Items] Could not decompress items.dat");
                     break;
                 }
@@ -244,7 +244,7 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
             }
 
             if (m_state.items.Load(data, size))
-                Log::Info("[Items] Loaded %zu items (items.dat version %u)", m_state.items.Count(),
+                Log::Info("[Items] Loaded %zu items (items.dat version %d)", m_state.items.Count(),
                           m_state.items.Version());
             break;
         }
@@ -258,19 +258,28 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
 
         case PACKET_STATE: {
             auto it = m_state.players.find(game.netID);
-            if (it != m_state.players.end())
-                it->second.tile = {(int32)(game.pos.x / 32), (int32)(game.pos.y / 32)};
+            if (it != m_state.players.end()) {
+                it->second.tile.x = game.pos.x / 32;
+                it->second.tile.y = game.pos.y / 32;
+            }
+            break;
+        }
+
+        case PACKET_SEND_TILE_TREE_STATE: {
+            if (game.targetID == -1)
+                m_state.world.ClearForeground(game.tileX, game.tileY);
             break;
         }
 
         case PACKET_TILE_CHANGE_REQUEST: {
+            if (game.netID == m_state.local.netID && game.value != 18 && game.value != 32)
+                m_state.inventory.SetCount(game.value, m_state.inventory.GetCount(game.value) - 1);
+
             Tile* tile = m_state.world.GetTile(game.tileX, game.tileY);
             if (!tile)
                 break;
 
             if (game.value == 18) {
-                // a tile change to the fist (18) means the tile was destroyed: the foreground goes first, then the
-                // background
                 if (tile->foreground != 0) {
                     m_state.world.ClearForeground(game.tileX, game.tileY);
                 } else {
@@ -281,9 +290,9 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
 
             const Item* item = m_state.items.Get(game.value);
             if (item && item->type == ITEM_TYPE_BACKGROUND)
-                tile->background = (uint16)game.value;
+                tile->background = game.value;
             else
-                tile->foreground = (uint16)game.value;
+                tile->foreground = game.value;
             break;
         }
 
@@ -306,13 +315,24 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                 break;
 
             // netID encodes the operation: -3 modified, -1 added, anything else removed
-            uint8 count = (uint8)game.floatValue;
+            int count = game.floatValue;
             if (game.netID == -3)
-                world.ModifyDroppedItem((uint32)game.targetID, (uint16)game.value, count, game.pos, game.byte1);
+                world.ModifyDroppedItem(game.targetID, game.value, count, game.pos, game.byte1);
             else if (game.netID == -1)
-                world.AddDroppedItem((uint16)game.value, count, game.pos, game.byte1);
-            else
-                world.RemoveDroppedItem((uint32)game.value);
+                world.AddDroppedItem(game.value, count, game.pos, game.byte1);
+            else {
+                if (game.netID == m_state.local.netID) {
+                    for (const DroppedItem& dropped : world.GetDroppedItems()) {
+                        if (dropped.uid != game.value || dropped.itemID == 112)
+                            continue;
+                        // assumes the 200 stack limit; picking up more than fits is left on the ground by the
+                        // game, which then sends a -3 modify for the rest
+                        m_state.inventory.SetCount(dropped.itemID, m_state.inventory.GetCount(dropped.itemID) + dropped.count);
+                        break;
+                    }
+                }
+                world.RemoveDroppedItem(game.value);
+            }
             break;
         }
 
@@ -322,7 +342,13 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                 if (!m_state.inventory.Load(extra, game.extraDataSize))
                     Log::Error("[Inventory] Could not read the inventory");
             } else if (game.type == PACKET_MODIFY_ITEM_INVENTORY && game.value != 0) {
-                m_state.inventory.SetCount((uint16)game.value, game.byte1);
+                // a change, not the new amount
+                int count = m_state.inventory.GetCount(game.value);
+                if (game.byte3 != 0)
+                    count += game.byte3; // gained
+                else
+                    count -= game.byte2; // lost
+                m_state.inventory.SetCount(game.value, count);
             }
             break;
         }
@@ -385,7 +411,7 @@ bool Proxy::OnPacketFromClient(const PacketView& packet) {
 
 // Connections
 
-bool Proxy::Start(const char* host, uint16 port) {
+bool Proxy::Start(const char* host, int port) {
     ENetAddress address{};
     address.port = port;
     if (enet_address_set_host(&address, host) != 0)
@@ -413,7 +439,7 @@ void Proxy::Stop() {
     }
 }
 
-void Proxy::Poll(uint32 timeoutMs) {
+void Proxy::Poll(int timeoutMs) {
     if (!m_clientHost)
         return;
 
@@ -439,7 +465,7 @@ void Proxy::Poll(uint32 timeoutMs) {
     RunDueTasks();
 }
 
-void Proxy::WaitForTraffic(uint32 timeoutMs) const {
+void Proxy::WaitForTraffic(int timeoutMs) const {
     ENetSocketSet readSet;
     ENET_SOCKETSET_EMPTY(readSet);
 
@@ -449,7 +475,8 @@ void Proxy::WaitForTraffic(uint32 timeoutMs) const {
         if (!host)
             continue;
         ENET_SOCKETSET_ADD(readSet, host->socket);
-        highest = std::max(highest, host->socket);
+        if (host->socket > highest)
+            highest = host->socket;
         any = true;
     }
 
@@ -472,7 +499,7 @@ void Proxy::Disconnect() {
     });
 }
 
-uint32 Proxy::GetServerPing() const {
+int Proxy::GetServerPing() const {
     return m_server && m_serverConnected ? m_server->roundTripTime : 0;
 }
 
@@ -501,7 +528,7 @@ void Proxy::HandleClientEvent(ENetEvent& event) {
                 break;
             }
 
-            Log::Info("[Proxy] Client connected, connecting to %s:%u", target->host.c_str(), target->port);
+            Log::Info("[Proxy] Client connected, connecting to %s:%d", target->host.c_str(), target->port);
             ConnectToServer(*target);
             break;
         }
@@ -639,7 +666,7 @@ void Proxy::DisconnectClient() {
     m_client = nullptr;
 }
 
-void Proxy::Schedule(uint32 delayMs, std::function<void()> task) {
+void Proxy::Schedule(int delayMs, std::function<void()> task) {
     m_tasks.emplace(Platform::NowMs() + delayMs, std::move(task));
 }
 
