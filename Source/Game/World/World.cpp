@@ -27,27 +27,27 @@ namespace {
     // Tiles of these items store an extra CBOR blob (uint32 size + bytes) after the tile.
     bool HasCborData(uint16 itemID) {
         switch (itemID) {
-            case 3548:
-            case 8624:
-            case 8630:
-            case 8636:
-            case 8642:
-            case 8648:
-            case 8654:
-            case 8660:
-            case 8666:
-            case 8672:
-            case 8678:
-            case 8684:
-            case 8690:
-            case 8696:
-            case 8702:
-            case 8708:
-            case 8714:
-            case 14662:
-            case 14666:
-            case 15376:
-            case 15546:
+            case 3548:  // Battle Pet Cage
+            case 8624:  // Bountiful Flowering Lattice Roots
+            case 8630:  // Bountiful Climbing Hydrangea Lattice Roots
+            case 8636:  // Bountiful Flowering Garland Roots
+            case 8642:  // Bountiful Lattice Fence Roots
+            case 8648:  // Bountiful Jungle Temple Roots
+            case 8654:  // Bountiful Jungle Temple Background Roots
+            case 8660:  // Bountiful Jungle Temple Door Roots
+            case 8666:  // Bountiful Jungle Temple Pillar Roots
+            case 8672:  // Bountiful Bamboo Background Roots
+            case 8678:  // Bountiful Bamboo Platform Roots
+            case 8684:  // Bountiful Bamboo Ladder Roots
+            case 8690:  // Bountiful Bamboo Spikes Roots
+            case 8696:  // Bountiful White Doll's Eyes Roots
+            case 8702:  // Bountiful Monkshood Roots
+            case 8708:  // Bountiful Corpse Flower Roots
+            case 8714:  // Bountiful Growtopian-Eating Looming Plant Roots
+            case 14662: // Operating Table
+            case 14666: // Auto Surgeon Station
+            case 15376: // Party Projector
+            case 15546: // Auction Block
                 return true;
             default:
                 return false;
@@ -273,7 +273,7 @@ bool World::HasAccess(int32 x, int32 y, int32 userID) const {
         return true;
 
     auto lock = m_access.find((size_t)lockIndex);
-    if (lock == m_access.end() || (size_t)lockIndex >= m_tiles.size())
+    if (lock == m_access.end())
         return false;
 
     if (m_tiles[lockIndex].HasFlag(TILE_FLAG_IS_OPEN_TO_PUBLIC) || lock->second.Allows(userID))
@@ -306,8 +306,7 @@ void World::ModifyDroppedItem(uint32 uid, uint16 itemID, uint8 count, Vec2f pos,
 }
 
 void World::RemoveDroppedItem(uint32 uid) {
-    auto it = std::find_if(m_droppedItems.begin(), m_droppedItems.end(),
-                           [uid](const DroppedItem& item) { return item.uid == uid; });
+    auto it = std::find_if(m_droppedItems.begin(), m_droppedItems.end(), [uid](const DroppedItem& item) { return item.uid == uid; });
     if (it != m_droppedItems.end()) {
         *it = m_droppedItems.back();
         m_droppedItems.pop_back();

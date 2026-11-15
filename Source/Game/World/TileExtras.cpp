@@ -474,19 +474,11 @@ bool ReadTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion, Ti
             r.Skip(1 + 4 + 3); // pattern, unknown, rgb
             break;
 
-        case TILE_EXTRA_FRIENDS_ENTRANCE: {
+        case TILE_EXTRA_FRIENDS_ENTRANCE:
             r.Read(access.owner);
             r.Skip(2); // unknown
-            uint16 count = r.Read<uint16>();
-            if (count > r.Remaining() / 4) {
-                r.Skip(count * 4u); // fails the reader
-                return false;
-            }
-            access.allowed.resize(count);
-            for (int32& id : access.allowed)
-                r.Read(id);
+            ReadUserList<uint16>(r, access.allowed);
             return true;
-        }
 
         default:
             break;
