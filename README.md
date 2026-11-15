@@ -53,7 +53,7 @@ cmake --build Build\Proxy --config Release --target Proxy
 127.0.0.1 growtopia2.com
 ```
 
-2. Run `Bin/Proxy.exe` or .\Bin\Proxy.exe and start Growtopia.
+2. Run `Bin/Proxy.exe` or `.\Bin\Proxy.exe` and start Growtopia.
 3. Press **Ctrl+C** in the console to stop the proxy. Remove the hosts lines to play without it.
 
 ---

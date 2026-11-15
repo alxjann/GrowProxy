@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <mutex>
 #include <thread>
 
@@ -29,7 +30,26 @@ namespace {
         return FALSE;
     }
 
-    // The executable is a GUI application; --headless gets a console (the parent's, or a new one).
+    bool ReadUseGui() {
+        const std::wstring path = Platform::ToWide(Platform::GetExecutableDir() + "\\config.json");
+
+        std::ifstream in(path);
+        if (!in) {
+            std::ofstream(path) << "{\n    \"gui\": true\n}\n";
+            return true;
+        }
+        string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+        size_t pos = text.find("\"gui\"");
+        if (pos == string::npos)
+            return true;
+        pos = text.find(':', pos);
+        if (pos == string::npos)
+            return true;
+        pos = text.find_first_not_of(" \t\r\n", pos + 1);
+        return pos == string::npos || text.compare(pos, 5, "false") != 0;
+    }
+
     void OpenConsole() {
         if (!AttachConsole(ATTACH_PARENT_PROCESS))
             AllocConsole();
@@ -104,7 +124,7 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-    bool headless = false;
+    bool headless = !ReadUseGui(); // --headless still forces console mode
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--headless") == 0)
             headless = true;
