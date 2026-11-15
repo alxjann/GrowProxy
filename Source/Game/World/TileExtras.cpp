@@ -24,9 +24,7 @@ namespace {
         r.Skip(r.Read<uint32>() * elementSize);
     }
 
-    // uint32 count followed by that many user ids.
-    void ReadUserList(ByteReader& r, std::vector<int32>& out) {
-        uint32 count = r.Read<uint32>();
+    void ReadUserList(ByteReader& r, uint32 count, std::vector<int32>& out) {
         if (count > r.Remaining() / 4) {
             r.Skip(count * 4); // fails the reader
             return;
@@ -232,7 +230,7 @@ bool ReadTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion, Ti
         case TILE_EXTRA_LOCK:
             r.Skip(1); // flags
             r.Read(access.owner);
-            ReadUserList(r, access.allowed);
+            ReadUserList(r, r.Read<uint32>(), access.allowed);
             if (worldVersion > 11)
                 r.Skip(4); // minimum entry level
             if (worldVersion > 12)
@@ -381,7 +379,7 @@ bool ReadTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion, Ti
         case TILE_EXTRA_VIP_DOOR:
             r.Skip(1); // flags
             r.Read(access.owner);
-            ReadUserList(r, access.allowed);
+            ReadUserList(r, r.Read<uint32>(), access.allowed);
             return true;
 
         case TILE_EXTRA_FISH_MOUNT:
@@ -477,7 +475,7 @@ bool ReadTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion, Ti
         case TILE_EXTRA_FRIENDS_ENTRANCE:
             r.Read(access.owner);
             r.Skip(2); // unknown
-            ReadUserList<uint16>(r, access.allowed);
+            ReadUserList(r, r.Read<uint16>(), access.allowed);
             return true;
 
         default:
