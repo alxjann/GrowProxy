@@ -22,7 +22,7 @@ void ProxyUI::DrawInfo() {
         bool connecting = m_proxy.IsConnectingToServer();
         const Endpoint& endpoint = m_proxy.GetServerEndpoint();
 
-        snprintf(text, sizeof(text), "%s:%u", Config::LOCAL_HOST, Config::LOCAL_ENET_PORT);
+        snprintf(text, sizeof(text), "%s:%d", Config::LOCAL_HOST, Config::LOCAL_ENET_PORT);
         Widgets::KeyValue("Proxy address", text);
         Widgets::KeyValue("Game client", client ? "Connected" : "Waiting", client ? Theme::Accent : Theme::TextMuted);
         Widgets::KeyValue("Game server", server ? "Connected" : (connecting ? "Connecting" : "Offline"),
@@ -30,14 +30,14 @@ void ProxyUI::DrawInfo() {
         if (endpoint.host.empty())
             snprintf(text, sizeof(text), "-");
         else
-            snprintf(text, sizeof(text), "%s:%u", endpoint.host.c_str(), endpoint.port);
+            snprintf(text, sizeof(text), "%s:%d", endpoint.host.c_str(), endpoint.port);
         Widgets::KeyValue("Server address", text);
-        snprintf(text, sizeof(text), server ? "%u ms" : "-", m_proxy.GetServerPing());
+        snprintf(text, sizeof(text), server ? "%d ms" : "-", m_proxy.GetServerPing());
         Widgets::KeyValue("Ping", text);
 
         const ItemDatabase& items = m_proxy.State().items;
         if (items.Count() > 0)
-            snprintf(text, sizeof(text), "%s items (v%u)", Widgets::FormatNumber(items.Count()).c_str(), items.Version());
+            snprintf(text, sizeof(text), "%s items (v%d)", Widgets::FormatNumber(items.Count()).c_str(), items.Version());
         else
             snprintf(text, sizeof(text), "Not loaded");
         Widgets::KeyValue("Item database", text);
