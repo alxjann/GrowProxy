@@ -61,10 +61,7 @@ public:
     uint8 Peek() const { return m_pos < m_size ? m_data[m_pos] : 0; }
 
     bool Ok() const { return m_ok; }
-    size_t Position() const { return m_pos; }
-    size_t Size() const { return m_size; }
     size_t Remaining() const { return m_size - m_pos; }
-    const uint8* Current() const { return m_data + m_pos; }
 
 private:
     bool Has(size_t size) {
