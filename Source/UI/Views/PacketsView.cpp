@@ -106,13 +106,15 @@ namespace {
         ImGui::PopStyleColor();
         ImGui::TableNextColumn();
 
-        char text[256];
+        char text[1024]; // fits every flag name
         va_list args;
         va_start(args, fmt);
         vsnprintf(text, sizeof(text), fmt, args);
         va_end(args);
         Theme::PushMono();
+        ImGui::PushTextWrapPos(0.0f);
         ImGui::TextUnformatted(text);
+        ImGui::PopTextWrapPos();
         ImGui::PopFont();
     }
 
@@ -148,22 +150,50 @@ namespace {
         ImGui::EndTable();
     }
 
-    void HexDump(const std::vector<uint8>& data) {
+    // Game packet flag bits by index; nullptr = no known name. Names from GrowTrace's GamePacket.h.
+    const char* const FLAG_NAMES[32] = {
+        "BROADCAST",          nullptr,                   "NO_LERP",
+        "EXTENDED_DATA",      "FACING_LEFT",             "ON_GROUND",
+        "ON_BURN",            "ON_JUMP",                 "ON_KILL",
+        "ON_PUNCH",           "ON_CREATE",               "SEND_ASAP",
+        "ON_GOT_PUNCH",       "ON_RESPAWN",              "ON_GOT_OBJECT",
+        "ON_TRAMPOLINE",      "ON_PRICK",                "ON_ICE",
+        "HAND_ITEM_ACTIVE",   "BACK_ITEM_ACTIVE",        "UNDERWATER",
+        "WALLHANG",           "CHARGING_PUNCH",          "CHARGING_PUNCH_END",
+        "CHARGING_PUNCH_LEVEL_UP", "PLAY_HAY_CART_VISUALS", "DOUBLE_JUMP_ACTIVE",
+        "EXTRA_TILE_INFO",    "ON_ACID",                 "TELEPORT",
+        "ON_USE_ABILITY",     nullptr,
+    };
+
+    // "NAME | NAME | bit 1" for the set bits, "none" when no bit is set.
+    string FlagList(uint32 flags) {
+        string out;
+        for (int bit = 0; bit < 32; ++bit) {
+            if (!(flags & (1u << bit)))
+                continue;
+            if (!out.empty())
+                out += " | ";
+            out += FLAG_NAMES[bit] ? FLAG_NAMES[bit] : "bit " + std::to_string(bit);
+        }
+        return out.empty() ? "none" : out;
+    }
+
+    void HexDump(const uint8* data, size_t size) {
         constexpr size_t PER_LINE = 16;
         Theme::PushMono();
         ImGuiListClipper clipper;
-        clipper.Begin((int)((data.size() + PER_LINE - 1) / PER_LINE));
+        clipper.Begin((int)((size + PER_LINE - 1) / PER_LINE));
         while (clipper.Step()) {
             for (int line = clipper.DisplayStart; line < clipper.DisplayEnd; ++line) {
                 size_t offset = (size_t)line * PER_LINE;
-                size_t count = std::min(PER_LINE, data.size() - offset);
+                size_t count = std::min(PER_LINE, size - offset);
 
                 char ascii[PER_LINE + 1] = {};
                 for (size_t i = 0; i < count; ++i) {
                     uint8 c = data[offset + i];
                     ascii[i] = c >= 32 && c < 127 ? (char)c : '.';
                 }
-                string hex = Hex(data.data() + offset, count);
+                string hex = Hex(data + offset, count);
                 hex.resize(PER_LINE * 3 - 1, ' ');
 
                 ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextFaint);
@@ -356,7 +386,7 @@ void ProxyUI::DrawPacketDetails(ImVec2 size) {
         ImGui::BeginChild("##details_body", ImVec2(0, 0));
         PacketView view = packet->View();
         if (m_packets.detailTab == 1) {
-            HexDump(packet->data);
+            HexDump(packet->data.data(), packet->data.size());
         } else if (packet->messageType != MESSAGE_GAME_PACKET) {
             Widgets::SectionLabel(PacketNames::Message(packet->messageType));
             TextFields(view.Text());
@@ -365,7 +395,7 @@ void ProxyUI::DrawPacketDetails(ImVec2 size) {
             const uint8* extra = nullptr;
             if (!view.GetGamePacket(game, &extra)) {
                 Widgets::TextColored(Theme::Warning, Theme::FONT_BODY, "Truncated game packet");
-                HexDump(packet->data);
+                HexDump(packet->data.data(), packet->data.size());
             } else {
                 VariantList call;
                 if (game.type == PACKET_CALL_FUNCTION && extra && call.Parse(extra, game.extraDataSize)) {
@@ -397,11 +427,12 @@ void ProxyUI::DrawPacketDetails(ImVec2 size) {
                 if (ImGui::BeginTable("##fields", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
                     ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed, 120.0f * Scale());
                     ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
-                    FieldRow("type", "%u  (%s)", game.type, PacketNames::Game(game.type));
+                    FieldRow("type", "%u  (0x%02X, %s)", game.type, game.type, PacketNames::Game(game.type));
                     FieldRow("byte1 / 2 / 3", "%u / %u / %u", game.byte1, game.byte2, game.byte3);
                     FieldRow("netID", "%d", game.netID);
                     FieldRow("targetID", "%d", game.targetID);
                     FieldRow("flags", "0x%08X", game.flags);
+                    FieldRow("active flags", "%s", FlagList(game.flags).c_str());
                     FieldRow("floatValue", "%g", game.floatValue);
                     FieldRow("value", "%d", game.value);
                     FieldRow("pos", "%.1f, %.1f", game.pos.x, game.pos.y);
@@ -410,6 +441,12 @@ void ProxyUI::DrawPacketDetails(ImVec2 size) {
                     FieldRow("tile", "%d, %d", game.tileX, game.tileY);
                     FieldRow("extraDataSize", "%u", game.extraDataSize);
                     ImGui::EndTable();
+                }
+
+                if (extra) {
+                    ImGui::Dummy(ImVec2(0, 6.0f * Scale()));
+                    Widgets::SectionLabel("Extended data");
+                    HexDump(extra, game.extraDataSize);
                 }
             }
         }
