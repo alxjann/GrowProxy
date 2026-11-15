@@ -8,6 +8,6 @@ class ItemDatabase;
 class Proxy;
 class World;
 
-std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i start, Vec2i goal, int32 userID);
+std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i start, Vec2i goal, int userID);
 
 void WalkTo(Proxy& proxy, Vec2i goal);

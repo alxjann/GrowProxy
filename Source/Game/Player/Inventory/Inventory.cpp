@@ -30,7 +30,8 @@ void Inventory::Clear() {
     m_items.clear();
 }
 
-void Inventory::SetCount(uint16 itemID, uint8 count) {
+void Inventory::SetCount(int itemID, int count) {
+    count = std::clamp(count, 0, 200); // 200 is the most of one item a player can hold
     auto it = std::find_if(m_items.begin(), m_items.end(),
                            [itemID](const InventoryItem& item) { return item.itemID == itemID; });
 
@@ -40,11 +41,14 @@ void Inventory::SetCount(uint16 itemID, uint8 count) {
     } else if (it != m_items.end()) {
         it->count = count;
     } else {
-        m_items.push_back({itemID, count, 0});
+        InventoryItem item;
+        item.itemID = itemID;
+        item.count = count;
+        m_items.push_back(item);
     }
 }
 
-uint8 Inventory::GetCount(uint16 itemID) const {
+int Inventory::GetCount(int itemID) const {
     for (const InventoryItem& item : m_items) {
         if (item.itemID == itemID)
             return item.count;

@@ -7,15 +7,15 @@
 namespace {
 
     // Items whose tile extra layout differs from the rest of their type.
-    constexpr uint16 ITEM_DATA_BEDROCK = 3760;
-    constexpr uint16 ITEM_GUILD_LOCK = 5814;
-    constexpr uint16 ITEM_PROVIDER_WITH_DATA = 5318;
-    constexpr uint16 ITEM_PROVIDER_WITH_DATA_V17 = 10656;
-    constexpr uint16 ITEM_FLAG_WITH_COUNTRY = 3394;
-    constexpr uint16 ITEM_PORTRAIT_WITH_TEXT = 12958;
+    constexpr int ITEM_DATA_BEDROCK = 3760;
+    constexpr int ITEM_GUILD_LOCK = 5814;
+    constexpr int ITEM_PROVIDER_WITH_DATA = 5318;
+    constexpr int ITEM_PROVIDER_WITH_DATA_V17 = 10656;
+    constexpr int ITEM_FLAG_WITH_COUNTRY = 3394;
+    constexpr int ITEM_PORTRAIT_WITH_TEXT = 12958;
 
     // Clothing items that carry 8 extra bytes when worn by a mannequin or portrait.
-    bool HasExtraClothData(uint16 itemID) {
+    bool HasExtraClothData(int itemID) {
         return itemID == 5712 || itemID == 10044;
     }
 
@@ -36,7 +36,7 @@ namespace {
 
 }
 
-uint8 GetTileExtraTypeForItem(int32 itemID, uint8 itemType) {
+int GetTileExtraTypeForItem(int itemID, int itemType) {
     if (itemID == ITEM_DATA_BEDROCK)
         return TILE_EXTRA_BEDROCK;
 
@@ -209,11 +209,11 @@ uint8 GetTileExtraTypeForItem(int32 itemID, uint8 itemType) {
     }
 }
 
-bool TileAccess::Allows(int32 userID) const {
+bool TileAccess::Allows(int userID) const {
     return userID > 0 && (owner == userID || std::find(allowed.begin(), allowed.end(), userID) != allowed.end());
 }
 
-bool ReadTileExtra(ByteReader& r, uint8 type, uint16 fg, uint16 worldVersion, TileAccess& access) {
+bool ReadTileExtra(ByteReader& r, int type, int fg, int worldVersion, TileAccess& access) {
     r.Skip(1); // type byte
 
     switch (type) {

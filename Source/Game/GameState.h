@@ -13,7 +13,7 @@ struct GameState {
     World world;
     Inventory inventory;
     LocalPlayer local;
-    std::unordered_map<int32, Player> players; // by netID, includes the local player
+    std::unordered_map<int, Player> players;   // by netID, includes the local player
 
     bool antigravityEnabled = false;
 

@@ -76,7 +76,7 @@ namespace {
     }
 
     void RunHeadless(Proxy& proxy) {
-        Log::Info("Proxy is running on %s:%u. Press Ctrl+C to stop.", Config::LOCAL_HOST, Config::LOCAL_ENET_PORT);
+        Log::Info("Proxy is running on %s:%d. Press Ctrl+C to stop.", Config::LOCAL_HOST, Config::LOCAL_ENET_PORT);
         while (s_running)
             proxy.Poll(1);
     }
@@ -104,7 +104,7 @@ namespace {
             }
         });
 
-        Log::Info("Proxy is running on %s:%u", Config::LOCAL_HOST, Config::LOCAL_ENET_PORT);
+        Log::Info("Proxy is running on %s:%d", Config::LOCAL_HOST, Config::LOCAL_ENET_PORT);
 
         ProxyUI ui(proxy, capture);
         window.SetDrawCallback([&]() {
@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
 
     Proxy proxy(serverData);
     if (!proxy.Start(Config::LOCAL_HOST, Config::LOCAL_ENET_PORT)) {
-        Log::Error("Cannot listen on %s:%u", Config::LOCAL_HOST, Config::LOCAL_ENET_PORT);
+        Log::Error("Cannot listen on %s:%d", Config::LOCAL_HOST, Config::LOCAL_ENET_PORT);
         if (!headless)
             MessageBoxA(nullptr, "Cannot listen on the local proxy port. Is GrowProxy already running?", "GrowProxy",
                         MB_ICONERROR | MB_OK);

@@ -127,19 +127,19 @@ public:
     // Loads an uncompressed items.dat. Returns false (and keeps the previous data) on failure.
     bool Load(const uint8* data, size_t size);
 
-    const Item* Get(int32 id) const;
+    const Item* Get(int id) const;
     size_t Count() const { return m_items.size(); }
-    uint16 Version() const { return m_version; }
+    int Version() const { return m_version; }
 
     // Hash of the server's items.dat that our data matches; 0 if we never received one.
     uint32 Hash() const { return m_hash; }
     void SetHash(uint32 hash) { m_hash = hash; }
 
     // Display name, or "Item <id>" if unknown.
-    string GetName(int32 id) const;
+    string GetName(int id) const;
 
 private:
     std::vector<Item> m_items;
-    uint16 m_version = 0;
+    int m_version = 0;
     uint32 m_hash = 0;
 };

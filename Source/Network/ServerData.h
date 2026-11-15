@@ -7,7 +7,7 @@
 
 struct Endpoint {
     string host;
-    uint16 port = 0;
+    int port = 0;
 };
 
 // Answers the client's POST /growtopia/server_data.php: fetches the real server data, remembers the real game

@@ -5,14 +5,14 @@
 
 namespace {
 
-    constexpr uint16 MAX_SUPPORTED_VERSION = 27;
+    constexpr int MAX_SUPPORTED_VERSION = 27;
 
     // From version 3 item names are XOR-ed with this key, starting at (id % key length).
-    string DecodeName(const string& encoded, int32 id) {
+    string DecodeName(const string& encoded, int id) {
         constexpr string_view key = "PBG892FXX982ABC*";
 
         string name = encoded;
-        size_t k = (size_t)id % key.size();
+        size_t k = id % key.size();
         for (char& c : name) {
             c ^= key[k];
             k = (k + 1) % key.size();
@@ -21,7 +21,7 @@ namespace {
     }
 
     // Reads one item. Fields the proxy does not use are skipped, but every field must be consumed.
-    void ReadItem(ByteReader& r, uint16 version, Item& item) {
+    void ReadItem(ByteReader& r, int version, Item& item) {
         r.Read(item.id);
         r.Read(item.flags);
         r.Read(item.type);
@@ -114,11 +114,11 @@ namespace {
 
 bool ItemDatabase::Load(const uint8* data, size_t size) {
     ByteReader reader(data, size);
-    uint16 version = reader.Read<uint16>();
+    int version = reader.Read<uint16>();
     uint32 count = reader.Read<uint32>();
 
     if (!reader.Ok() || version > MAX_SUPPORTED_VERSION) {
-        Log::Error("[Items] Unsupported items.dat version %u", version);
+        Log::Error("[Items] Unsupported items.dat version %d", version);
         return false;
     }
 
@@ -136,11 +136,11 @@ bool ItemDatabase::Load(const uint8* data, size_t size) {
     return true;
 }
 
-const Item* ItemDatabase::Get(int32 id) const {
-    return id >= 0 && (size_t)id < m_items.size() ? &m_items[id] : nullptr;
+const Item* ItemDatabase::Get(int id) const {
+    return id >= 0 && id < m_items.size() ? &m_items[id] : nullptr;
 }
 
-string ItemDatabase::GetName(int32 id) const {
+string ItemDatabase::GetName(int id) const {
     const Item* item = Get(id);
     return item && !item->name.empty() ? item->name : "Item " + std::to_string(id);
 }

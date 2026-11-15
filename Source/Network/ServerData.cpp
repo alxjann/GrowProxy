@@ -182,8 +182,8 @@ bool RedirectServerData(const string& data, const Endpoint& target, string& outD
                 outOriginal.host = string(value);
                 line = "server|" + target.host;
             } else if (key == "port") {
-                int32 port = Strings::ToInt(value).value_or(0);
-                outOriginal.port = port > 0 && port <= 65535 ? (uint16)port : 0;
+                int port = Strings::ToInt(value).value_or(0);
+                outOriginal.port = port > 0 && port <= 65535 ? port : 0;
                 line = "port|" + std::to_string(target.port);
             }
         }
@@ -222,7 +222,7 @@ HttpResponse ServerData::Handle(const HttpRequest& request) {
         return {500, ""};
     }
 
-    Log::Info("[HTTP] Game server is %s:%u, redirecting the client to the proxy", gameServer.host.c_str(),
+    Log::Info("[HTTP] Game server is %s:%d, redirecting the client to the proxy", gameServer.host.c_str(),
               gameServer.port);
     {
         std::lock_guard<std::mutex> lock(m_mutex);

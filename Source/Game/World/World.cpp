@@ -10,7 +10,7 @@
 
 namespace {
 
-    constexpr int32 MAX_TILES = 255 * 255;
+    constexpr int MAX_TILES = 255 * 255;
 
     bool IsAreaLock(uint16 itemID) {
         switch (itemID) {
@@ -73,7 +73,7 @@ bool World::Load(const uint8* data, size_t size, const ItemDatabase& items) {
     r.Read(m_height);
     uint32 tileCount = r.Read<uint32>();
 
-    if (!r.Ok() || m_width <= 0 || m_height <= 0 || tileCount != (uint32)(m_width * m_height) ||
+    if (!r.Ok() || m_width <= 0 || m_height <= 0 || tileCount != m_width * m_height ||
         tileCount > MAX_TILES) {
         Log::Error("[World] Invalid world header (%dx%d, %u tiles)", m_width, m_height, tileCount);
         Clear();
@@ -171,7 +171,7 @@ bool World::ReadTile(ByteReader& r, Tile& tile, const ItemDatabase& items, TileA
     return r.Ok();
 }
 
-bool World::UpdateTile(int32 x, int32 y, const uint8* data, size_t size, const ItemDatabase& items) {
+bool World::UpdateTile(int x, int y, const uint8* data, size_t size, const ItemDatabase& items) {
     Tile* tile = GetTile(x, y);
     if (!tile)
         return false;
@@ -183,7 +183,7 @@ bool World::UpdateTile(int32 x, int32 y, const uint8* data, size_t size, const I
     if (!ReadTile(r, updated, items, access, hasAccess))
         return false;
 
-    size_t index = (size_t)y * m_width + x;
+    int index = y * m_width + x;
     if (tile->extraType == TILE_EXTRA_LOCK && updated.extraType != TILE_EXTRA_LOCK)
         ReleaseLockArea(index);
 
@@ -198,8 +198,8 @@ bool World::UpdateTile(int32 x, int32 y, const uint8* data, size_t size, const I
     return true;
 }
 
-void World::StoreAccess(size_t index, const Tile& tile, TileAccess&& access, bool hasAccess, const ItemDatabase& items) {
-    if (m_worldLock == (int32)index)
+void World::StoreAccess(int index, const Tile& tile, TileAccess&& access, bool hasAccess, const ItemDatabase& items) {
+    if (m_worldLock == index)
         m_worldLock = -1;
 
     if (!hasAccess) {
@@ -210,10 +210,10 @@ void World::StoreAccess(size_t index, const Tile& tile, TileAccess&& access, boo
     m_access[index] = std::move(access);
     const Item* item = items.Get(tile.foreground);
     if (tile.extraType == TILE_EXTRA_LOCK && item && item->type == ITEM_TYPE_LOCK && !IsAreaLock(tile.foreground))
-        m_worldLock = (int32)index;
+        m_worldLock = index;
 }
 
-void World::ReleaseLockArea(size_t lockIndex) {
+void World::ReleaseLockArea(int lockIndex) {
     for (Tile& tile : m_tiles) {
         if (tile.HasFlag(TILE_FLAG_HAS_PARENT) && tile.parent == lockIndex) {
             tile.flags &= ~TILE_FLAG_HAS_PARENT;
@@ -222,12 +222,12 @@ void World::ReleaseLockArea(size_t lockIndex) {
     }
 }
 
-void World::ClearForeground(int32 x, int32 y) {
+void World::ClearForeground(int x, int y) {
     Tile* tile = GetTile(x, y);
     if (!tile)
         return;
 
-    size_t index = (size_t)y * m_width + x;
+    int index = y * m_width + x;
     if (tile->extraType == TILE_EXTRA_LOCK)
         ReleaseLockArea(index);
 
@@ -235,15 +235,15 @@ void World::ClearForeground(int32 x, int32 y) {
     tile->flags &= ~TILE_FLAG_HAS_EXTRA_DATA;
     tile->extraType = TILE_EXTRA_NONE;
     m_access.erase(index);
-    if (m_worldLock == (int32)index)
+    if (m_worldLock == index)
         m_worldLock = -1;
 }
 
-void World::SetLockArea(int32 x, int32 y, const uint8* indices, size_t size) {
+void World::SetLockArea(int x, int y, const uint8* indices, size_t size) {
     if (!GetTile(x, y))
         return;
 
-    size_t lockIndex = (size_t)y * m_width + x;
+    int lockIndex = y * m_width + x;
     ReleaseLockArea(lockIndex);
 
     for (size_t i = 0; i + 2 <= size; i += 2) {
@@ -252,48 +252,54 @@ void World::SetLockArea(int32 x, int32 y, const uint8* indices, size_t size) {
         if (index >= m_tiles.size() || index == lockIndex)
             continue;
         m_tiles[index].flags |= TILE_FLAG_HAS_PARENT;
-        m_tiles[index].parent = (uint16)lockIndex;
+        m_tiles[index].parent = lockIndex;
     }
 }
 
-const TileAccess* World::GetAccess(int32 x, int32 y) const {
+const TileAccess* World::GetAccess(int x, int y) const {
     if (!GetTile(x, y))
         return nullptr;
-    auto it = m_access.find((size_t)y * m_width + x);
+    auto it = m_access.find(y * m_width + x);
     return it != m_access.end() ? &it->second : nullptr;
 }
 
-bool World::HasAccess(int32 x, int32 y, int32 userID) const {
+bool World::HasAccess(int x, int y, int userID) const {
     const Tile* tile = GetTile(x, y);
     if (!tile)
         return false;
 
-    int32 lockIndex = tile->HasFlag(TILE_FLAG_HAS_PARENT) ? tile->parent : m_worldLock;
+    int lockIndex = tile->HasFlag(TILE_FLAG_HAS_PARENT) ? tile->parent : m_worldLock;
     if (lockIndex < 0)
         return true;
 
-    auto lock = m_access.find((size_t)lockIndex);
+    auto lock = m_access.find(lockIndex);
     if (lock == m_access.end())
         return false;
 
     if (m_tiles[lockIndex].HasFlag(TILE_FLAG_IS_OPEN_TO_PUBLIC) || lock->second.Allows(userID))
         return true;
 
-    auto worldLock = m_worldLock >= 0 ? m_access.find((size_t)m_worldLock) : m_access.end();
+    auto worldLock = m_worldLock >= 0 ? m_access.find(m_worldLock) : m_access.end();
     return worldLock != m_access.end() && userID > 0 && worldLock->second.owner == userID;
 }
 
-Tile* World::GetTile(int32 x, int32 y) {
+Tile* World::GetTile(int x, int y) {
     if (!m_loaded || x < 0 || y < 0 || x >= m_width || y >= m_height)
         return nullptr;
-    return &m_tiles[(size_t)y * m_width + x];
+    return &m_tiles[y * m_width + x];
 }
 
-void World::AddDroppedItem(uint16 itemID, uint8 count, Vec2f pos, uint8 flags) {
-    m_droppedItems.push_back({++m_lastDroppedUid, itemID, count, flags, pos});
+void World::AddDroppedItem(int itemID, int count, Vec2f pos, int flags) {
+    DroppedItem item;
+    item.uid = ++m_lastDroppedUid;
+    item.itemID = itemID;
+    item.count = count;
+    item.flags = flags;
+    item.pos = pos;
+    m_droppedItems.push_back(item);
 }
 
-void World::ModifyDroppedItem(uint32 uid, uint16 itemID, uint8 count, Vec2f pos, uint8 flags) {
+void World::ModifyDroppedItem(int uid, int itemID, int count, Vec2f pos, int flags) {
     for (DroppedItem& item : m_droppedItems) {
         if (item.uid == uid) {
             item.itemID = itemID;
@@ -305,7 +311,7 @@ void World::ModifyDroppedItem(uint32 uid, uint16 itemID, uint8 count, Vec2f pos,
     }
 }
 
-void World::RemoveDroppedItem(uint32 uid) {
+void World::RemoveDroppedItem(int uid) {
     auto it = std::find_if(m_droppedItems.begin(), m_droppedItems.end(), [uid](const DroppedItem& item) { return item.uid == uid; });
     if (it != m_droppedItems.end()) {
         *it = m_droppedItems.back();

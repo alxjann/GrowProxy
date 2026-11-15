@@ -46,22 +46,22 @@ public:
     explicit Proxy(const ServerData& serverData);
     ~Proxy();
 
-    bool Start(const char* host, uint16 port);
+    bool Start(const char* host, int port);
     void Stop();
 
     // Services the network once (waiting up to timeoutMs) and runs due scheduled tasks.
-    void Poll(uint32 timeoutMs);
+    void Poll(int timeoutMs);
 
     // Blocks until either connection has incoming data or timeoutMs passes, without touching any proxy state.
     // Lets a network thread wait without holding the lock that guards the proxy, then Poll(0) under it.
     // Must be called from the thread that calls Poll().
-    void WaitForTraffic(uint32 timeoutMs) const;
+    void WaitForTraffic(int timeoutMs) const;
 
     // Drops both connections on the next Poll(); the game client will reconnect through server_data.php.
     void Disconnect();
 
     // Runs a task on the network thread after a delay.
-    void Schedule(uint32 delayMs, std::function<void()> task);
+    void Schedule(int delayMs, std::function<void()> task);
 
     // The client will reconnect to the proxy; connect it to this server instead of the one from server_data.php.
     void RedirectNextConnection(const Endpoint& server);
@@ -75,7 +75,7 @@ public:
     bool IsServerConnected() const { return m_serverConnected; }
     bool IsConnectingToServer() const { return m_server != nullptr && !m_serverConnected; }
     const Endpoint& GetServerEndpoint() const { return m_serverEndpoint; } // last server connected to
-    uint32 GetServerPing() const; // round trip time in ms, 0 when not connected
+    int GetServerPing() const; // round trip time in ms, 0 when not connected
 
     // Called on the network thread for every packet received, forwarded, blocked or created by the proxy.
     void SetPacketObserver(std::function<void(const PacketEvent&)> observer) { m_observer = std::move(observer); }
@@ -84,7 +84,7 @@ public:
     // target: Client sends to the Growtopia client, Server to the game server.
     void Send(Target target, const GameUpdatePacket& packet, const void* extraData = nullptr, uint32 extraSize = 0);
     void Send(Target target, MessageType type, string_view text);
-    void Send(Target target, const VariantList& call, int32 netID = -1, uint32 delayMs = 0);
+    void Send(Target target, const VariantList& call, int netID = -1, int delayMs = 0);
 
     void ConsoleMessage(const string& text);
     void TextOverlay(const string& text);
@@ -103,7 +103,7 @@ private:
 
     // Sends raw packet bytes to the client or the server; does nothing (returns false) while that side is not
     // connected.
-    bool SendPacket(Target target, const uint8* data, size_t size, uint8 channel, uint32 flags);
+    bool SendPacket(Target target, const uint8* data, size_t size, int channel, int flags);
     void SendOwnPacket(Target target, const std::vector<uint8>& data);
     void Notify(Target to, bool fromProxy, bool blocked, const uint8* data, size_t size);
 

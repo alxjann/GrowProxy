@@ -9,10 +9,10 @@
 
 namespace {
 
-    constexpr uint32 STEP_INTERVAL_MS = 2;
+    constexpr int STEP_INTERVAL_MS = 2;
     constexpr size_t LONG_PATH = 150; // longer paths only send every second step
-    constexpr int32 WALK_STATE_ITEM = 6326;
-    constexpr uint32 WALK_STATE_FLAGS = 32 | 128 | (1 << 10) | (1 << 11);
+    constexpr int WALK_STATE_ITEM = 6326;
+    constexpr int WALK_STATE_FLAGS = 32 | 128 | (1 << 10) | (1 << 11);
 
     enum TileRule : uint8 {
         RULE_OPEN,       // from anywhere
@@ -23,7 +23,7 @@ namespace {
         RULE_LEFT_ONLY,  // one-way block facing left (flipped)
     };
 
-    bool CanUseEntrance(const World& world, const Tile& tile, int32 x, int32 y, int32 userID) {
+    bool CanUseEntrance(const World& world, const Tile& tile, int x, int y, int userID) {
         if (tile.HasFlag(TILE_FLAG_IS_OPEN_TO_PUBLIC))
             return true;
 
@@ -34,7 +34,7 @@ namespace {
         return world.HasAccess(x, y, userID);
     }
 
-    TileRule GetTileRule(const World& world, const ItemDatabase& items, int32 x, int32 y, int32 userID) {
+    TileRule GetTileRule(const World& world, const ItemDatabase& items, int x, int y, int userID) {
         const Tile& tile = *world.GetTile(x, y);
         if (tile.foreground == 0)
             return RULE_OPEN;
@@ -86,32 +86,32 @@ namespace {
 
 }
 
-std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i start, Vec2i goal, int32 userID) {
-    const int32 width = world.GetWidth();
-    const int32 height = world.GetHeight();
+std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i start, Vec2i goal, int userID) {
+    const int width = world.GetWidth();
+    const int height = world.GetHeight();
     auto inside = [&](Vec2i p) { return p.x >= 0 && p.y >= 0 && p.x < width && p.y < height; };
-    auto index = [&](Vec2i p) { return (size_t)p.y * width + p.x; };
+    auto index = [&](Vec2i p) { return p.y * width + p.x; };
 
     if (!inside(start) || !inside(goal))
         return {};
 
     std::vector<TileRule> rules(world.GetTiles().size());
-    for (int32 y = 0; y < height; ++y) {
-        for (int32 x = 0; x < width; ++x)
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x)
             rules[index({x, y})] = GetTileRule(world, items, x, y, userID);
     }
 
     // A* with Manhattan distance
     struct Node {
-        int32 cost; // distance so far + estimate
-        int32 distance;
+        int cost; // distance so far + estimate
+        int distance;
         Vec2i pos;
         bool operator>(const Node& other) const { return cost > other.cost; }
     };
     auto estimate = [&](Vec2i p) { return std::abs(goal.x - p.x) + std::abs(goal.y - p.y); };
 
-    std::vector<int32> distance(rules.size(), INT32_MAX);
-    std::vector<int32> cameFrom(rules.size(), -1);
+    std::vector<int> distance(rules.size(), INT32_MAX);
+    std::vector<int> cameFrom(rules.size(), -1);
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> open;
 
     distance[index(start)] = 0;
@@ -124,7 +124,7 @@ std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i
 
         if (current.pos.x == goal.x && current.pos.y == goal.y) {
             std::vector<Vec2i> path;
-            for (int32 i = (int32)index(goal); i != -1; i = cameFrom[i])
+            for (int i = index(goal); i != -1; i = cameFrom[i])
                 path.push_back({i % width, i / width});
             std::reverse(path.begin(), path.end());
             return path;
@@ -139,7 +139,7 @@ std::vector<Vec2i> FindPath(const World& world, const ItemDatabase& items, Vec2i
                 continue;
 
             distance[index(next)] = current.distance + 1;
-            cameFrom[index(next)] = (int32)index(current.pos);
+            cameFrom[index(next)] = index(current.pos);
             open.push({current.distance + 1 + estimate(next), current.distance + 1, next});
         }
     }
@@ -157,7 +157,9 @@ void WalkTo(Proxy& proxy, Vec2i goal) {
         return;
     }
 
-    Vec2i start{(int32)std::floor(state.local.pos.x / 32.0f), (int32)std::floor(state.local.pos.y / 32.0f)};
+    Vec2i start;
+    start.x = std::floor(state.local.pos.x / 32.0f);
+    start.y = std::floor(state.local.pos.y / 32.0f);
     start.x = std::clamp(start.x, 0, world.GetWidth() - 1);
     start.y = std::clamp(start.y, 0, world.GetHeight() - 1);
 
@@ -169,7 +171,7 @@ void WalkTo(Proxy& proxy, Vec2i goal) {
 
     // tell the server we walked the path, one tile at a time
     size_t stride = path.size() < LONG_PATH ? 1 : 2;
-    uint32 delay = 0;
+    int delay = 0;
     for (size_t i = 0; i < path.size(); i += stride) {
         Vec2i tile = path[i];
         proxy.Schedule(delay, [&proxy, tile]() {
