@@ -551,6 +551,9 @@ bool Certificates::Ensure(const string& directory, Paths& out) {
         return false;
     }
 
+    // only needed again if the .pem files go missing, and then it is downloaded again
+    fs::remove(mkcert, error);
+
     Log::Info("[SSL] Certificate created.");
     return true;
 }
