@@ -9,6 +9,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
+# Build the C++ runtime into the exe, so it runs without the Visual C++ Redistributable.
+# The policy default makes libraries with an older cmake_minimum_required (mbedtls) follow it too.
+set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(USE_MSVC_RUNTIME_LIBRARY_DLL OFF CACHE BOOL "" FORCE) # GLFW's own runtime switch
+
 set(SOURCE_ROOT "${CMAKE_CURRENT_LIST_DIR}/Source")
 set(LIB_ROOT "${CMAKE_CURRENT_LIST_DIR}/Lib")
 

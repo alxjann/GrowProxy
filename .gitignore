@@ -13,3 +13,5 @@ Build/Proxy
 
 UI/*
 Tests/*
+
+dist/*
