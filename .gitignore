@@ -5,9 +5,9 @@ Build/*
 !Build/*.bat
 !Build/*.sh
 
-Bin/*
-!Bin/*.bat
-!Bin/*.sh
+Proxy/*
+!Proxy/*.bat
+!Proxy/*.sh
 
 Build/Proxy
 

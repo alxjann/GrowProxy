@@ -93,8 +93,8 @@ if(MSVC)
     target_compile_options(Proxy PRIVATE /bigobj /utf-8)
 endif()
 set_target_properties(Proxy PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/Bin"
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/Bin"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/Proxy"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/Proxy"
 )
 
 # Tests are local only (Tests/ is git-ignored); build them when the folder is present.
