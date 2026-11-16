@@ -1,0 +1,42 @@
+# Builds the proxy and publishes a GitHub release when a version tag is pushed:
+#   git tag v1.1.0
+#   git push origin v1.1.0
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the release and upload the zip
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # glfw and mbedtls
+
+      - name: Configure
+        run: cmake -S . -B Build/Proxy -A x64
+
+      - name: Build
+        run: cmake --build Build/Proxy --config Release --target Proxy
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "GrowProxy-${{ github.ref_name }}"
+          New-Item -ItemType Directory -Force "dist/GrowProxy" | Out-Null
+          Copy-Item "Proxy/Proxy.exe" "dist/GrowProxy/"
+          Set-Content -Encoding utf8 "dist/GrowProxy/config.json" "{`n    `"gui`": true`n}"
+          Compress-Archive -Path "dist/GrowProxy" -DestinationPath "dist/$name.zip"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/GrowProxy-${{ github.ref_name }}.zip
+          generate_release_notes: true
