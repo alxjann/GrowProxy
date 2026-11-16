@@ -8,7 +8,9 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <ctime>
 #include <map>
 
 namespace {
@@ -82,6 +84,170 @@ namespace {
         }
     }
 
+    // RENDER_DIRECT8: variant cell (index into the 8x6 block, row by row) for each 8-neighbour mask. Corners only
+    // count when both sides next to them are joined too, which leaves 47 shapes. Values from Mori
+    // (github.com/CLOEI/Mori), with masks 160 and 224 fixed to cells 46 and 6 (all 47 shapes checked against fire.rttex).
+    // Mask bits: 1 top-left, 2 top, 4 top-right, 8 right, 16 bottom-right, 32 bottom, 64 bottom-left, 128 left.
+    const std::array<uint8, 256>& Direct8Cells() {
+        static const std::array<uint8, 256> cells = [] {
+            const std::pair<int, int> shapes[] = {
+                {0, 12},   {2, 11},   {8, 29},   {10, 43},  {14, 7},   {32, 10},  {34, 9},   {40, 45},  {42, 33},
+                {46, 32},  {56, 5},   {58, 31},  {62, 3},   {128, 30}, {130, 44}, {131, 8},  {136, 28}, {138, 42},
+                {139, 41}, {142, 40}, {143, 2},  {160, 46}, {162, 36}, {163, 35}, {168, 39}, {170, 27}, {171, 23},
+                {174, 24}, {175, 18}, {184, 37}, {186, 26}, {187, 22}, {190, 19}, {191, 15}, {224, 6},  {226, 34},
+                {227, 4},  {232, 38}, {234, 25}, {235, 20}, {238, 21}, {239, 16}, {248, 1},  {250, 17}, {251, 14},
+                {254, 13}, {255, 0},
+            };
+            std::array<uint8, 256> table{};
+            for (int mask = 0; mask < 256; ++mask) {
+                int m = mask;
+                if (!(m & 2) || !(m & 128))
+                    m &= ~1;
+                if (!(m & 2) || !(m & 8))
+                    m &= ~4;
+                if (!(m & 32) || !(m & 8))
+                    m &= ~16;
+                if (!(m & 32) || !(m & 128))
+                    m &= ~64;
+                table[mask] = 12; // no neighbours
+                for (auto [shape, cell] : shapes) {
+                    if (shape == m)
+                        table[mask] = cell;
+                }
+            }
+            return table;
+        }();
+        return cells;
+    }
+
+    // Cell in an 8x6 block of joined shapes, from a callback telling which of the 8 neighbours are joined.
+    template <typename Joined> int Direct8Cell(Joined&& joined) {
+        int mask = joined(-1, -1) | joined(0, -1) << 1 | joined(1, -1) << 2 | joined(1, 0) << 3 | joined(1, 1) << 4 |
+                   joined(0, 1) << 5 | joined(-1, 1) << 6 | joined(-1, 0) << 7;
+        return Direct8Cells()[mask];
+    }
+
+    bool AttachesToWalls(const Item& item) {
+        return item.renderType == RENDER_ATTACH_TO_WALL_5 || item.renderType == RENDER_ATTACH_TO_WALL_4;
+    }
+
+    // The cell an item shows when nothing is next to it (as in the inventory); used for the fruit on trees.
+    Vec2i IconCell(const Item& item) {
+        int variant = 0;
+        switch (item.renderType) {
+            case RENDER_DIRECT8:
+            case RENDER_DIRECT4:
+                variant = 12;
+                break;
+            case RENDER_HORIZONTAL:
+            case RENDER_VERTICAL:
+            case RENDER_CAVE_PLATFORM:
+            case RENDER_DIAGONAL:
+            case RENDER_ATTACH_TO_WALL_4:
+                variant = 3;
+                break;
+            case RENDER_ATTACH_TO_WALL_5:
+                variant = 4;
+                break;
+            default:
+                break;
+        }
+        Vec2i cell;
+        cell.x = item.textureX + variant % 8;
+        cell.y = item.textureY + variant / 8;
+        return cell;
+    }
+
+    // The texture cell the game draws for an item on a tile. Items that join their neighbours (dirt, platforms,
+    // pipes...) pick a variant next to their base cell depending on which neighbours hold the same item. The
+    // variant orders were read off the texture sheets; the world's edge counts as a neighbour, so blocks run
+    // into it without a border.
+    Vec2i TextureCell(const World& world, const ItemDatabase& items, const Tile& tile, const Item& item, int x, int y,
+                      bool background) {
+        // 1 when the neighbour holds the same item on the same layer, so results can be shifted into masks
+        auto same = [&](int dx, int dy) {
+            const Tile* other = world.GetTile(x + dx, y + dy);
+            return !other || (background ? other->background : other->foreground) == item.id ? 1 : 0;
+        };
+        // a solid block to hang on to (other wall-attached items don't count, so rows of spikes stay aligned)
+        auto wall = [&](int dx, int dy) {
+            const Tile* other = world.GetTile(x + dx, y + dy);
+            const Item* block = other && other->foreground != 0 ? items.Get(other->foreground) : nullptr;
+            return block && block->collisionType == COLLISION_SOLID && !AttachesToWalls(*block);
+        };
+        // pieces of a line: first, middle, last, alone
+        auto line = [](bool before, bool after) { return before && after ? 1 : after ? 0 : before ? 2 : 3; };
+
+        Vec2i cell;
+        cell.x = item.textureX;
+        cell.y = item.textureY;
+        int variant = 0; // cells right of the base cell (or index into a block for DIRECT8 / DIRECT4)
+
+        switch (item.renderType) {
+            case RENDER_DIRECT8:
+                variant = Direct8Cell(same);
+                break;
+            case RENDER_DIRECT4: {
+                // mask bits: 1 top, 2 left, 4 right, 8 bottom (table from Mori, checked with ice)
+                static const int cells[16] = {12, 11, 15, 8, 14, 7, 13, 2, 10, 9, 6, 4, 5, 3, 1, 0};
+                int mask = same(0, -1) | same(-1, 0) << 1 | same(1, 0) << 2 | same(0, 1) << 3;
+                variant = cells[mask];
+                break;
+            }
+            case RENDER_HORIZONTAL:
+                variant = line(same(-1, 0), same(1, 0));
+                break;
+            case RENDER_CAVE_PLATFORM: {
+                bool left = same(-1, 0), right = same(1, 0);
+                variant = !left && wall(-1, 0) ? 4 : !right && wall(1, 0) ? 5 : line(left, right);
+                break;
+            }
+            case RENDER_VERTICAL:
+                // bottom piece first: streetlamp base, pole, lamp
+                variant = line(same(0, 1), same(0, -1));
+                break;
+            case RENDER_DIAGONAL: {
+                // rises to the right, or to the left when flipped; lowest step first
+                int rise = tile.HasFlag(TILE_FLAG_FLIPPED_X) ? -1 : 1;
+                variant = line(same(-rise, 1), same(rise, -1));
+                break;
+            }
+            case RENDER_ATTACH_TO_WALL_5:
+            case RENDER_ATTACH_TO_WALL_4:
+                // shortcut: the order the sides are tried in is a guess (floor first); the sheets only give the cells
+                variant = wall(0, 1) ? 3 : wall(0, -1) ? 1 : wall(-1, 0) ? 0 : wall(1, 0) ? 2
+                          : item.renderType == RENDER_ATTACH_TO_WALL_5 ? 4 : 3;
+                break;
+            case RENDER_RANDOM:
+                variant = (unsigned)(x * 7919 + y * 104729) % 4; // fixed per tile, so the map doesn't flicker
+                break;
+            default:
+                break;
+        }
+        cell.x += variant % 8;
+        cell.y += variant / 8;
+
+        // switched on (doors, switches, ...): the "on" picture is the next cell
+        if (tile.HasFlag(background ? TILE_FLAG_BG_IS_ON : TILE_FLAG_IS_ON))
+            cell.x += 1;
+        return cell;
+    }
+
+    // Tint of a painted tile (paint bucket colors mix: red + green is yellow, all three is charcoal).
+    ImU32 PaintColor(const Tile& tile) {
+        bool red = tile.HasFlag(TILE_FLAG_PAINTED_RED);
+        bool green = tile.HasFlag(TILE_FLAG_PAINTED_GREEN);
+        bool blue = tile.HasFlag(TILE_FLAG_PAINTED_BLUE);
+        if (!red && !green && !blue)
+            return IM_COL32_WHITE;
+        if (red && green && blue)
+            return IM_COL32(70, 70, 70, 255);
+        return IM_COL32(red ? 255 : 60, green ? 255 : 60, blue ? 255 : 60, 255);
+    }
+
+    // Item colors in items.dat are stored as B, G, R, A from the high byte down.
+    ImU32 ItemColor(uint32 color) { return IM_COL32((color >> 8) & 0xFF, (color >> 16) & 0xFF, color >> 24, 255); }
+
     struct FlagName {
         uint16 flag;
         const char* name;
@@ -154,6 +320,9 @@ void ProxyUI::DrawWorld() {
 
 void ProxyUI::DrawWorldToolbar() {
     const float spacing = 16.0f * Scale();
+    Widgets::Switch("Textures", &m_world.showTextures);
+    Widgets::Tooltip("Draws blocks with the game's textures; off shows them as colors by collision type");
+    Widgets::SameLineIfFits(Widgets::SwitchWidth("Background"), spacing);
     Widgets::Switch("Background", &m_world.showBackground);
     Widgets::SameLineIfFits(Widgets::SwitchWidth("Players"), spacing);
     Widgets::Switch("Players", &m_world.showPlayers);
@@ -293,25 +462,106 @@ void ProxyUI::DrawWorldMap(ImVec2 size) {
     const ImU32 noAccess = Theme::U32(Theme::WithAlpha(Theme::Danger, 0.22f));
     const ImU32 lockOutline = Theme::U32(Theme::Hex(0xF5C542, 0.9f));
 
+    // draws a sheet cell over the tile, mirrored for flipped tiles and multiplied by tint
+    auto drawSprite = [&](const string& sheet, Vec2i cell, bool flipped, ImVec2 min, ImVec2 max,
+                          ImU32 tint = IM_COL32_WHITE) {
+        TextureCache::Sprite sprite;
+        if (!m_textures.GetSprite(sheet, cell.x, cell.y, sprite))
+            return false;
+        if (flipped)
+            std::swap(sprite.uv0.x, sprite.uv1.x);
+        draw->AddImage(sprite.texture, min, max, sprite.uv0, sprite.uv1, tint);
+        return true;
+    };
+
+    // planted seeds are drawn as their tree: trunk and leaves, both grey in the sheet and tinted by the seed. The
+    // tree grows from the ground up to the full tile, then shows its fruit.
+    const uint32 now = (uint32)std::time(nullptr);
+    auto drawTree = [&](const Tile& t, const Item& seed, ImVec2 min, ImVec2 max) {
+        float growth = 1.0f; // fully grown when the age is unknown
+        if (seed.growTime > 0 && t.plantedAt != 0)
+            growth = now > t.plantedAt ? std::min(1.0f, (float)(now - t.plantedAt) / (float)seed.growTime) : 0.0f;
+
+        float size = tile * (0.35f + 0.65f * growth);
+        ImVec2 treeMin((min.x + max.x - size) * 0.5f, max.y - size);
+        ImVec2 treeMax(treeMin.x + size, max.y);
+        bool flipped = t.HasFlag(TILE_FLAG_FLIPPED_X);
+
+        Vec2i trunk, leaves;
+        trunk.x = seed.treeBase;
+        trunk.y = 19;
+        leaves.x = seed.treeLeaves;
+        leaves.y = 18;
+        if (!drawSprite("tiles_page1.rttex", trunk, flipped, treeMin, treeMax, ItemColor(seed.treeColor)))
+            return false;
+        drawSprite("tiles_page1.rttex", leaves, flipped, treeMin, treeMax, ItemColor(seed.leavesColor));
+
+        // ready to harvest: the fruit hangs in the leaves
+        const Item* fruit = growth >= 1.0f && tile >= 10.0f ? items.Get(seed.id - 1) : nullptr;
+        if (fruit) {
+            static const ImVec2 spots[] = {{0.16f, 0.14f}, {0.52f, 0.10f}, {0.34f, 0.34f}, {0.04f, 0.38f}, {0.64f, 0.36f}};
+            const float fruitSize = tile * 0.32f;
+            for (int i = 0; i < std::min<int>(t.fruits, IM_ARRAYSIZE(spots)); ++i) {
+                ImVec2 at(min.x + spots[i].x * tile, min.y + spots[i].y * tile);
+                drawSprite(fruit->texture, IconCell(*fruit), false, at, ImVec2(at.x + fruitSize, at.y + fruitSize));
+            }
+        }
+        return true;
+    };
+
+    // draws the tile's item with its texture; false when it has none, so the caller falls back to a color
+    auto drawTexture = [&](const Tile& t, int32 x, int32 y, bool background, ImVec2 min, ImVec2 max) {
+        const Item* item = items.Get(background ? t.background : t.foreground);
+        if (!m_world.showTextures || !item)
+            return false;
+        if (item->type == ITEM_TYPE_SEED && !background && drawTree(t, *item, min, max))
+            return true;
+
+        // paint colors the foreground, or the background of a tile without one
+        ImU32 tint = background == (t.foreground == 0) ? PaintColor(t) : IM_COL32_WHITE;
+        return drawSprite(item->texture, TextureCell(world, items, t, *item, x, y, background),
+                          t.HasFlag(TILE_FLAG_FLIPPED_X), min, max, tint);
+    };
+
+    // water and fire spread over tiles like a block that joins its neighbours
+    auto drawOverlay = [&](const char* sheet, uint16 flag, int32 x, int32 y, ImVec2 min, ImVec2 max, ImU32 tint) {
+        int variant = Direct8Cell([&](int dx, int dy) {
+            const Tile* other = world.GetTile(x + dx, y + dy);
+            return !other || other->HasFlag(flag) ? 1 : 0;
+        });
+        Vec2i cell;
+        cell.x = variant % 8;
+        cell.y = variant / 8;
+        drawSprite(sheet, cell, false, min, max, tint);
+    };
+
     for (int32 y = y0; y <= y1; ++y) {
         for (int32 x = x0; x <= x1; ++x) {
             const Tile* t = world.GetTile(x, y);
             if (!t)
                 continue;
 
-            ImVec2 min(base.x + x * tile, base.y + y * tile);
-            ImVec2 max(min.x + tile, min.y + tile);
-
-            if (m_world.showBackground && t->background != 0)
+            // whole pixels, each tile ending exactly where the next one starts, so no gap can open between them
+            ImVec2 min(std::floor(base.x + x * tile), std::floor(base.y + y * tile));
+            ImVec2 max(std::floor(base.x + (x + 1) * tile), std::floor(base.y + (y + 1) * tile));
+            if (m_world.showBackground && t->background != 0 && !drawTexture(*t, x, y, true, min, max))
                 draw->AddRectFilled(min, max, backgroundColor);
 
-            if (t->foreground != 0) {
+            if (t->foreground != 0 && !drawTexture(*t, x, y, false, min, max)) {
                 const Item* item = items.Get(t->foreground);
                 ImVec4 color = CollisionColor(item);
                 draw->AddRectFilled(ImVec2(min.x + inset, min.y + inset), ImVec2(max.x - inset, max.y - inset),
                                     Theme::U32(color), rounding);
                 if (item && item->type == ITEM_TYPE_LOCK && tile >= 5.0f)
                     draw->AddRect(min, max, lockOutline, rounding, 0, std::max(1.0f, tile * 0.08f));
+            }
+
+            if (m_world.showTextures) {
+                // the fire sheet is a white shape with a flame-colored rim; tinted, it reads as a glow
+                if (t->HasFlag(TILE_FLAG_ON_FIRE))
+                    drawOverlay("fire.rttex", TILE_FLAG_ON_FIRE, x, y, min, max, IM_COL32(255, 150, 40, 170));
+                if (t->HasFlag(TILE_FLAG_IS_WET))
+                    drawOverlay("water.rttex", TILE_FLAG_IS_WET, x, y, min, max, IM_COL32(255, 255, 255, 150));
             }
 
             if (m_world.showAccess && state.local.userID != -1 && !world.HasAccess(x, y, state.local.userID))
@@ -464,6 +714,15 @@ void ProxyUI::DrawTileTooltip(int32 x, int32 y) {
             Widgets::TextColored(Theme::TextMuted, Theme::FONT_SMALL, "ID %u", id);
     };
     itemBlock("Foreground", tile->foreground);
+    const Item* seed = state.items.Get(tile->foreground);
+    if (seed && seed->type == ITEM_TYPE_SEED && tile->foreground != 0 && tile->plantedAt != 0) {
+        uint32 age = (uint32)std::max<int64>(0, (int64)std::time(nullptr) - tile->plantedAt);
+        if (age >= seed->growTime)
+            Widgets::TextColored(Theme::Accent, Theme::FONT_SMALL, "Ready to harvest  Â·  %u fruit", tile->fruits);
+        else
+            Widgets::TextColored(Theme::TextMuted, Theme::FONT_SMALL, "%u%% grown  Â·  %u fruit",
+                                 (uint32)((uint64)age * 100 / seed->growTime), tile->fruits);
+    }
     itemBlock("Background", tile->background);
 
     string flags;

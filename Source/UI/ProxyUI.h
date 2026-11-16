@@ -2,6 +2,7 @@
 
 #include "Core/Log.h"
 #include "Core/Types.h"
+#include "UI/TextureCache.h"
 
 #include <imgui.h>
 
@@ -76,15 +77,18 @@ private:
         int32 hoverX = -1, hoverY = -1;
         int32 selectedX = -1, selectedY = -1;
         bool dragging = false;
+        bool showTextures = true; // the game's block textures instead of flat colors
         bool showBackground = true;
-        bool showDropped = true;
+        bool showDropped = false;
         bool showPlayers = true;
         bool showAccess = false;
-        bool showTileInfo = true; // hover tooltip
+        bool showTileInfo = false; // hover tooltip
         int tab = 0; // 0 overview, 1 map
         int inspectorTab = 0; // 0 players, 1 floating, 2 blocks
         char search[64] = "";
     } m_world;
+
+    TextureCache m_textures;
 
     char m_inventorySearch[64] = "";
 
