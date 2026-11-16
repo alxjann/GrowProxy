@@ -162,7 +162,7 @@ bool World::ReadTile(ByteReader& r, Tile& tile, const ItemDatabase& items, TileA
         }
 
         tile.extraType = type;
-        hasAccess = ReadTileExtra(r, type, tile.foreground, m_version, access);
+        hasAccess = ReadTileExtra(r, type, tile, m_version, access);
     }
 
     if (HasCborData(tile.foreground))
@@ -232,6 +232,8 @@ void World::ClearForeground(int x, int y) {
         ReleaseLockArea(index);
 
     tile->foreground = 0;
+    tile->fruits = 0;
+    tile->plantedAt = 0;
     tile->flags &= ~TILE_FLAG_HAS_EXTRA_DATA;
     tile->extraType = TILE_EXTRA_NONE;
     m_access.erase(index);

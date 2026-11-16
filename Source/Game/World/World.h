@@ -34,6 +34,8 @@ struct Tile {
     uint16 parent = 0;
     uint16 flags = 0;
     uint8 extraType = 0; // TileExtraType, 0 if none
+    uint8 fruits = 0;      // seeds: fruits on the tree
+    uint32 plantedAt = 0;  // seeds: unix time the seed was planted, 0 if unknown
 
     bool HasFlag(uint16 flag) const { return (flags & flag) != 0; }
 };

@@ -14,6 +14,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <ctime>
 
 constexpr size_t CHANNELS = 2;
 constexpr size_t MAX_CLIENTS = 32;
@@ -289,10 +290,16 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
             }
 
             const Item* item = m_state.items.Get(game.value);
-            if (item && item->type == ITEM_TYPE_BACKGROUND)
+            if (item && item->type == ITEM_TYPE_BACKGROUND) {
                 tile->background = game.value;
-            else
+            } else if (item && item->type == ITEM_TYPE_SEED) {
+                // planting sends no tile extra, so the tree's age and fruit count start here
                 tile->foreground = game.value;
+                tile->plantedAt = (uint32)std::time(nullptr);
+                tile->fruits = game.byte3; // the fruit count rides in the packet's third byte (shared with dice results)
+            } else {
+                tile->foreground = game.value;
+            }
             break;
         }
 

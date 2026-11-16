@@ -72,7 +72,7 @@ struct GameUpdatePacket {
     uint8 type = PACKET_STATE;
     uint8 byte1 = 0;    // object flags, inventory count, ...
     uint8 byte2 = 0;    // punch range
-    uint8 byte3 = 0;    // build range
+    uint8 byte3 = 0;    // build range, fruit count of a planted seed
     int32 netID = 0;    // source player
     int32 targetID = 0; // other player or object
     uint32 flags = 0;
