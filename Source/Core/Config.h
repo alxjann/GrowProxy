@@ -16,4 +16,8 @@ namespace Config {
     constexpr const char* DOH_PROVIDERS[] = {"https://1.1.1.1", "https://8.8.8.8"};
 
     constexpr uint32 SERVER_CONNECT_TIMEOUT_MS = 5000;
+
+    constexpr const char* DISCORD_APP_ID = "1571870080495517706";
+    constexpr const char* DISCORD_IMAGE_KEY = "icon";
+    constexpr const char* WEBSITE_URL = "https://growproxy.vercel.app";
 }

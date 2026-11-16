@@ -2,6 +2,7 @@
 #include "Core/Log.h"
 #include "Core/Platform.h"
 #include "Proxy/Proxy.h"
+#include "Network/DiscordPresence.h"
 #include "Network/Http.h"
 #include "Network/ServerData.h"
 #include "UI/PacketCapture.h"
@@ -163,6 +164,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    DiscordPresence discord;
+    discord.Start();
+
     if (headless)
         RunHeadless(proxy);
     else if (!RunWithUI(proxy))
@@ -171,6 +175,7 @@ int main(int argc, char** argv) {
                     "GrowProxy", MB_ICONERROR | MB_OK);
 
     Log::Info("Shutting down...");
+    discord.Stop();
     proxy.Stop();
     http.Stop();
     enet_deinitialize();
