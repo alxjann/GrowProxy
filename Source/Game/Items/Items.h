@@ -104,6 +104,21 @@ enum CollisionType : uint8 {
     COLLISION_JUMP_DOWN = 7, // solid from below
 };
 
+// How an item picks its texture cell from its neighbours (the byte after the texture cell in items.dat).
+enum RenderType : uint8 {
+    RENDER_FILLER = 0,
+    RENDER_SINGLE = 1,
+    RENDER_DIRECT8 = 2,    // joins all 8 neighbours: 47 variants in an 8x6 block (dirt, rock, ...)
+    RENDER_HORIZONTAL = 3, // joins left and right: 4 variants in a row
+    RENDER_ATTACH_TO_WALL_5 = 4, // turns towards the solid block next to it: left, top, right, bottom, none
+    RENDER_DIRECT4 = 5, // joins the 4 sides: 16 variants in an 8x2 block
+    RENDER_RANDOM = 6,  // one of 4 variants in a row
+    RENDER_VERTICAL = 7, // joins up and down: 4 variants in a row
+    RENDER_CAVE_PLATFORM = 8,    // like horizontal, plus 2 variants that end at a wall on the left / right
+    RENDER_ATTACH_TO_WALL_4 = 9, // like ATTACH_TO_WALL_5 without the "none" variant
+    RENDER_DIAGONAL = 10,        // stairs: joins the tiles below-left and above-right, 4 variants in a row
+};
+
 struct Item {
     int32 id = 0;
     uint16 flags = 0;
@@ -113,11 +128,17 @@ struct Item {
     string texture;
     uint8 textureX = 0;
     uint8 textureY = 0;
+    uint8 renderType = RENDER_SINGLE; // how the texture cell changes with the neighbouring tiles
     uint8 collisionType = COLLISION_NONE;
     uint8 breakHits = 0;
     int16 rarity = 0;
     uint8 maxAmount = 200;
     uint32 growTime = 0;
+    // seeds: the planted tree's sprites in tiles_page1.rttex (columns of rows 19 and 18) and their tints (BGRA)
+    uint8 treeBase = 0;
+    uint8 treeLeaves = 0;
+    uint32 treeColor = 0;
+    uint32 leavesColor = 0;
     string description;
 };
 

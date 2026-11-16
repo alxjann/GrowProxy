@@ -35,7 +35,8 @@ namespace {
         r.Skip(4 + 1 + 4); // texture hash, visual effect, cooking time
         r.Read(item.textureX);
         r.Read(item.textureY);
-        r.Skip(1 + 1); // storage type, layer
+        r.Read(item.renderType);
+        r.Skip(1); // layer
         r.Read(item.collisionType);
         r.Read(item.breakHits);
         r.Skip(4 + 1); // restore time, body part
@@ -52,8 +53,11 @@ namespace {
         if (version > 4)
             r.SkipString(); // pet ability
 
-        r.Skip(4);     // seed base, seed overlay, tree base, tree leaves
-        r.Skip(4 + 4); // seed colors
+        r.Skip(2); // seed base, seed overlay
+        r.Read(item.treeBase);
+        r.Read(item.treeLeaves);
+        r.Read(item.treeColor);
+        r.Read(item.leavesColor);
         r.Skip(2 + 2); // unused
         r.Read(item.growTime);
 
