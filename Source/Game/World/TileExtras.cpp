@@ -296,7 +296,14 @@ bool ReadTileExtra(ByteReader& r, int type, Tile& tile, int worldVersion, TileAc
         case TILE_EXTRA_GEIGER_CHARGER:
         case TILE_EXTRA_PHASED_BLOCK:
         case TILE_EXTRA_FEEDING_BLOCK:
+        case TILE_EXTRA_STEAM_ENGINE:   // temperature
+        case TILE_EXTRA_SPIRIT_STORAGE: // ghost jar count
+        case TILE_EXTRA_FOSSIL_PREP:
             r.Skip(4);
+            break;
+
+        case TILE_EXTRA_CHEM_TANK:
+            r.Skip(4 + 4); // current chemical, target chemical
             break;
 
         case TILE_EXTRA_XENONITE:

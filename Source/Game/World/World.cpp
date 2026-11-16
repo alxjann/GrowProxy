@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 
 namespace {
 
@@ -48,6 +49,7 @@ namespace {
             case 14666: // Auto Surgeon Station
             case 15376: // Party Projector
             case 15546: // Auction Block
+            case 16094: // Weather Machine - Concert Lights
                 return true;
             default:
                 return false;
@@ -90,6 +92,22 @@ bool World::Load(const uint8* data, size_t size, const ItemDatabase& items) {
             StoreAccess(i, m_tiles[i], std::move(access), hasAccess, items);
         } else {
             Log::Error("[World] Failed to read tile %u (%u, %u) of %s", i, i % m_width, i / m_width, m_name.c_str());
+
+            // The tile that fails is rarely the broken one: an extra read with the wrong size a few tiles earlier
+            // shifts everything after it. Log the last extras and keep the raw data so the layout can be fixed.
+
+/*
+            for (uint32 j = i, shown = 0; j-- > 0 && shown < 12;) {
+                if (m_tiles[j].extraType != TILE_EXTRA_NONE && ++shown)
+                    Log::Warn("[World]   earlier extra: tile %u item %u extra type %u", j, m_tiles[j].foreground,
+                              m_tiles[j].extraType);
+            }
+
+            if (std::ofstream dump("world_dump.bin", std::ios::binary); dump) {
+                dump.write((const char*)data, (std::streamsize)size);
+                Log::Warn("[World] Raw world data saved to world_dump.bin");
+            }
+*/
             Clear();
             return false;
         }
