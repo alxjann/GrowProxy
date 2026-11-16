@@ -95,6 +95,10 @@ add_executable(Proxy WIN32 ${SOURCE_ROOT}/Main.cpp ${PROXY_UI_SOURCES}
     ${CMAKE_CURRENT_LIST_DIR}/Resources/Proxy.rc # app icon (exe, window and taskbar)
 )
 target_link_libraries(Proxy PRIVATE ProxyCore imgui dwmapi)
+# rebuild the resources when the embedded files change
+set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/Resources/Proxy.rc PROPERTIES OBJECT_DEPENDS
+    "${CMAKE_CURRENT_LIST_DIR}/Resources/Icon.ico;${CMAKE_CURRENT_LIST_DIR}/Resources/GrowProxy_Banner.rttex"
+)
 if(MSVC)
     # keep main() as the entry point of the WIN32 subsystem executable; /bigobj for the embedded fonts
     target_link_options(Proxy PRIVATE /ENTRY:mainCRTStartup)

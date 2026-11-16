@@ -129,6 +129,7 @@ private:
     bool m_serverConnected = false;
     Endpoint m_serverEndpoint;
     uint64 m_connectStartedMs = 0;
+    bool m_gazetteBannerInstalled = false; // banner copied into the game folder (see OnDialogRequest)
     std::vector<PendingPacket> m_pendingToServer; // client packets received while still connecting
 
     bool m_redirecting = false;

@@ -14,10 +14,57 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <cstring>
 #include <ctime>
+#include <fstream>
+#include <iterator>
 
 constexpr size_t CHANNELS = 2;
 constexpr size_t MAX_CLIENTS = 32;
+
+namespace {
+
+    constexpr const char* GAZETTE_BANNER = "interface/large/growproxy_banner.rttex";
+    constexpr string_view GAZETTE_SECTION = "add_image_button|growproxy_banner|interface/large/growproxy_banner.rttex|"
+                                            "bannerlayout|||\n"
+                                            "add_spacer|small|\n"
+                                            "add_url_button|growproxy_site|`wVisit the GrowProxy website``|noflags|"
+                                            "https://growproxy.vercel.app|Open the GrowProxy website?|0|0|\n"
+                                            "add_spacer|small|\n";
+    bool InstallGazetteBanner() {
+        HMODULE module = GetModuleHandleA(nullptr);
+        HRSRC resource = FindResourceA(module, "GROWPROXY_BANNER", MAKEINTRESOURCEA(10)); // RT_RCDATA
+        HGLOBAL loaded = resource ? LoadResource(module, resource) : nullptr;
+        const char* bytes = loaded ? static_cast<const char*>(LockResource(loaded)) : nullptr;
+        DWORD size = resource ? SizeofResource(module, resource) : 0;
+        if (!bytes || size == 0)
+            return false;
+
+        char root[MAX_PATH];
+        DWORD length = GetEnvironmentVariableA("LOCALAPPDATA", root, sizeof(root));
+        if (length == 0 || length >= sizeof(root))
+            return false;
+
+        string path = string(root) + "\\Growtopia\\" + GAZETTE_BANNER;
+        std::replace(path.begin(), path.end(), '/', '\\');
+
+        std::ifstream existing(path, std::ios::binary);
+        if (existing) {
+            string current((std::istreambuf_iterator<char>(existing)), std::istreambuf_iterator<char>());
+            if (current.size() == size && std::memcmp(current.data(), bytes, size) == 0)
+                return true;
+        }
+        existing.close();
+
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        if (!file.write(bytes, size)) {
+            Log::Error("[Gazette] Could not write the banner to %s", path.c_str());
+            return false;
+        }
+        return true;
+    }
+
+}
 
 Proxy::Proxy(const ServerData& serverData) : m_serverData(serverData), m_commands(*this) {}
 
@@ -202,6 +249,37 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
 
                     spawnData[pos + 7] = '1';
                     call[1] = spawnData;
+
+                    std::vector<uint8> data = call.Serialize();
+                    Send(Client, game, data.data(), data.size());
+                    return false;
+                }
+
+                case "OnDialogRequest"_hash: {
+                    if (call.Size() < 2)
+                        return true;
+
+                    string dialog = call.GetString(1);
+                    if (dialog.find("end_dialog|gazette") == string::npos)
+                        return true;
+
+                    constexpr string_view title = "The Growtopia Gazette";
+                    size_t pos = dialog.find(title);
+                    if (pos != string::npos)
+                        dialog.replace(pos, title.size(), "GrowProxy");
+
+                    if (!m_gazetteBannerInstalled)
+                        m_gazetteBannerInstalled = InstallGazetteBanner();
+                    if (m_gazetteBannerInstalled) {
+                        size_t insertAt = dialog.find("add_image_button|");
+                        if (insertAt == string::npos) {
+                            size_t titleLine = dialog.find("add_label_with_icon|");
+                            size_t lineEnd = titleLine != string::npos ? dialog.find('\n', titleLine) : string::npos;
+                            insertAt = lineEnd != string::npos ? lineEnd + 1 : 0;
+                        }
+                        dialog.insert(insertAt, GAZETTE_SECTION);
+                    }
+                    call[1] = dialog;
 
                     std::vector<uint8> data = call.Serialize();
                     Send(Client, game, data.data(), data.size());

@@ -1,3 +1,4 @@
 // App icon. GLFW looks up the resource named GLFW_ICON for the window and
 // taskbar icon; Explorer uses the first icon resource for Proxy.exe.
 GLFW_ICON ICON "Icon.ico"
+GROWPROXY_BANNER RCDATA "GrowProxy_Banner.rttex"
