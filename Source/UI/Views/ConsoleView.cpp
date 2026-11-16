@@ -5,6 +5,8 @@
 #include "UI/Widgets.h"
 #include "Utils/Strings.h"
 
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 namespace {
@@ -33,6 +35,14 @@ namespace {
         }
     }
 
+    // A log line as plain text, the way it is copied to the clipboard.
+    string LineText(const Log::Entry& entry) {
+        char prefix[32];
+        snprintf(prefix, sizeof(prefix), "%02d:%02d:%02d %-5s ", entry.hour, entry.minute, entry.second,
+                 LevelName(entry.level));
+        return prefix + entry.message;
+    }
+
 }
 
 void ProxyUI::DrawConsole() {
@@ -50,6 +60,9 @@ void ProxyUI::DrawConsole() {
     Widgets::SameLineIfFits(90.0f * Scale(), spacing);
     if (Widgets::Button(ICON_FA_ERASER "  Clear", Widgets::ButtonKind::Ghost))
         console.entries.clear();
+    ImGui::SameLine(0, 4.0f * Scale());
+    bool copyAll = Widgets::Button(ICON_FA_COPY "  Copy all", Widgets::ButtonKind::Ghost);
+    Widgets::Tooltip("Copies the messages shown below; click a single line to copy just that one");
 
     ImGui::Dummy(ImVec2(0, 2.0f * Scale()));
 
@@ -66,6 +79,13 @@ void ProxyUI::DrawConsole() {
             visible.push_back(i);
     }
 
+    if (copyAll) {
+        string text;
+        for (int32 i : visible)
+            text += LineText(console.entries[i]) + "\n";
+        ImGui::SetClipboardText(text.c_str());
+    }
+
     Widgets::BeginCard("##log", avail);
     if (visible.empty()) {
         Widgets::EmptyState(ICON_FA_TERMINAL, console.entries.empty() ? "Log is empty" : "No matching messages",
@@ -78,6 +98,21 @@ void ProxyUI::DrawConsole() {
         while (clipper.Step()) {
             for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
                 const Log::Entry& entry = console.entries[visible[row]];
+
+                // the whole line is a click target: click copies it
+                ImVec2 rowMin = ImGui::GetCursorScreenPos();
+                ImVec2 rowMax(rowMin.x + std::max(ImGui::GetContentRegionAvail().x, 1.0f),
+                              rowMin.y + ImGui::GetTextLineHeightWithSpacing());
+                if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(rowMin, rowMax)) {
+                    ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, Theme::U32(Theme::Hex(0xFFFFFF, 0.05f)),
+                                                              4.0f * Scale());
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                        ImGui::SetClipboardText(LineText(entry).c_str());
+                    if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                        ImGui::SetTooltip("Copied");
+                }
+
                 Theme::PushMono();
                 ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextFaint);
                 ImGui::Text("%02d:%02d:%02d", entry.hour, entry.minute, entry.second);
