@@ -93,6 +93,8 @@ enum TileExtraType : uint8 {
 // Extra type an item uses, for tiles whose stored type byte is 0.
 int GetTileExtraTypeForItem(int itemID, int itemType);
 
+struct Tile;
+
 struct TileAccess {
     int32 owner = 0; // user id
     std::vector<int32> allowed;
@@ -100,5 +102,6 @@ struct TileAccess {
     bool Allows(int userID) const;
 };
 
-// Reads past one tile extra (type byte included) of the given type. Some layouts depend on the tile's
-bool ReadTileExtra(ByteReader& reader, int type, int foreground, int worldVersion, TileAccess& access);
+// Reads one tile extra (type byte included) of the given type, keeping what the proxy uses: a lock's access list
+// and a seed's age and fruit count.
+bool ReadTileExtra(ByteReader& reader, int type, Tile& tile, int worldVersion, TileAccess& access);

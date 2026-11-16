@@ -1,8 +1,10 @@
 #include "Game/World/TileExtras.h"
 
 #include "Game/Items/Items.h"
+#include "Game/World/World.h"
 
 #include <algorithm>
+#include <ctime>
 
 namespace {
 
@@ -213,7 +215,8 @@ bool TileAccess::Allows(int userID) const {
     return userID > 0 && (owner == userID || std::find(allowed.begin(), allowed.end(), userID) != allowed.end());
 }
 
-bool ReadTileExtra(ByteReader& r, int type, int fg, int worldVersion, TileAccess& access) {
+bool ReadTileExtra(ByteReader& r, int type, Tile& tile, int worldVersion, TileAccess& access) {
+    const int fg = tile.foreground;
     r.Skip(1); // type byte
 
     switch (type) {
@@ -240,7 +243,8 @@ bool ReadTileExtra(ByteReader& r, int type, int fg, int worldVersion, TileAccess
             return true;
 
         case TILE_EXTRA_SEED:
-            r.Skip(4 + 1); // grow time, fruit count
+            tile.plantedAt = (uint32)std::time(nullptr) - r.Read<uint32>(); // stored as seconds since planting
+            r.Read(tile.fruits);
             break;
 
         case TILE_EXTRA_MAILBOX:
