@@ -718,9 +718,9 @@ void ProxyUI::DrawTileTooltip(int32 x, int32 y) {
     if (seed && seed->type == ITEM_TYPE_SEED && tile->foreground != 0 && tile->plantedAt != 0) {
         uint32 age = (uint32)std::max<int64>(0, (int64)std::time(nullptr) - tile->plantedAt);
         if (age >= seed->growTime)
-            Widgets::TextColored(Theme::Accent, Theme::FONT_SMALL, "Ready to harvest  Â·  %u fruit", tile->fruits);
+            Widgets::TextColored(Theme::Accent, Theme::FONT_SMALL, "Ready to harvest  \xC2\xB7  %u fruit", tile->fruits);
         else
-            Widgets::TextColored(Theme::TextMuted, Theme::FONT_SMALL, "%u%% grown  Â·  %u fruit",
+            Widgets::TextColored(Theme::TextMuted, Theme::FONT_SMALL, "%u%% grown  \xC2\xB7  %u fruit",
                                  (uint32)((uint64)age * 100 / seed->growTime), tile->fruits);
     }
     itemBlock("Background", tile->background);
