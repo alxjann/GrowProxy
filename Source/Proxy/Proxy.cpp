@@ -31,6 +31,17 @@ namespace {
                                             "add_url_button|growproxy_site|`wVisit the GrowProxy website``|noflags|"
                                             "https://growproxy.vercel.app|Open the GrowProxy website?|0|0|\n"
                                             "add_spacer|small|\n";
+    // %LOCALAPPDATA%\Growtopia\<relativePath>
+    string GamePath(string relativePath) {
+        char root[MAX_PATH];
+        DWORD length = GetEnvironmentVariableA("LOCALAPPDATA", root, sizeof(root));
+        if (length == 0 || length >= sizeof(root))
+            return "";
+
+        std::replace(relativePath.begin(), relativePath.end(), '/', '\\');
+        return string(root) + "\\Growtopia\\" + relativePath;
+    }
+
     bool InstallGazetteBanner() {
         HMODULE module = GetModuleHandleA(nullptr);
         HRSRC resource = FindResourceA(module, "GROWPROXY_BANNER", MAKEINTRESOURCEA(10)); // RT_RCDATA
@@ -40,13 +51,9 @@ namespace {
         if (!bytes || size == 0)
             return false;
 
-        char root[MAX_PATH];
-        DWORD length = GetEnvironmentVariableA("LOCALAPPDATA", root, sizeof(root));
-        if (length == 0 || length >= sizeof(root))
+        string path = GamePath(GAZETTE_BANNER);
+        if (path.empty())
             return false;
-
-        string path = string(root) + "\\Growtopia\\" + GAZETTE_BANNER;
-        std::replace(path.begin(), path.end(), '/', '\\');
 
         std::ifstream existing(path, std::ios::binary);
         if (existing) {
@@ -61,6 +68,22 @@ namespace {
             Log::Error("[Gazette] Could not write the banner to %s", path.c_str());
             return false;
         }
+        return true;
+    }
+
+    bool LoadGameItems(ItemDatabase& items, uint32 serverHash) {
+        string path = GamePath("cache/items.dat");
+        std::ifstream file(path, std::ios::binary);
+        if (path.empty() || !file)
+            return false;
+
+        std::vector<uint8> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        if (data.empty() || FileHash(data.data(), data.size()) != serverHash)
+            return false;
+        if (!items.Load(data.data(), data.size()))
+            return false;
+
+        items.SetHash(serverHash);
         return true;
     }
 
@@ -168,7 +191,31 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
             if (!extra || !call.Parse(extra, game.extraDataSize))
                 return true;
 
-            switch (Hash(call.GetString(0))) {
+            string function = call.GetString(0);
+
+            if (Strings::StartsWith(function, "OnSuperMainStartAcceptLogon")) {
+                if (call.Size() < 2)
+                    return true;
+
+                uint32 serverHash = call.GetUInt(1);
+                if (m_state.items.Hash() == serverHash)
+                    return true;
+
+                if (LoadGameItems(m_state.items, serverHash)) {
+                    Log::Info("[Items] Loaded %zu items from the game's items.dat (version %d)", m_state.items.Count(),
+                              m_state.items.Version());
+                    return true;
+                }
+
+                Log::Info("[Items] items.dat changed (hash %u), making the client download it", serverHash);
+                call[1] = 0; // unsigned: the client expects a uint here
+
+                std::vector<uint8> data = call.Serialize();
+                Send(Client, game, data.data(), data.size());
+                return false;
+            }
+
+            switch (Hash(function)) {
                 // The server moves the client to another sub-server: point the client at the proxy again and
                 // remember the real target for when it reconnects.
                 case "OnSendToServer"_hash: {
@@ -186,28 +233,6 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
 
                     call[1] = Config::LOCAL_ENET_PORT;
                     call[4] = Config::LOCAL_HOST + rest;
-
-                    std::vector<uint8> data = call.Serialize();
-                    Send(Client, game, data.data(), data.size());
-                    return false;
-                }
-
-                // If our items.dat is not the server's, report hash 0 so the client asks for items.dat and we
-                // get to read it.
-                case "OnSuperMainStartAcceptLogonFB211131d"_hash:
-                case "OnSuperMainStartAcceptLogonFB211131dd"_hash:
-                case "OnSuperMainStartAcceptLogonFB211131ddf"_hash:
-                case "OnSuperMainStartAcceptLogonHrdxs47254722215a"_hash: {
-                    if (call.Size() < 2)
-                        return true;
-
-                    uint32 serverHash = call.GetUInt(1);
-                    if (m_state.items.Hash() == serverHash)
-                        return true;
-
-                    Log::Info("[Items] items.dat changed (hash %u), making the client download it", serverHash);
-                    m_state.items.SetHash(serverHash);
-                    call[1] = 0; // unsigned: the client expects a uint here
 
                     std::vector<uint8> data = call.Serialize();
                     Send(Client, game, data.data(), data.size());
@@ -322,9 +347,11 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                 size = inflated.size();
             }
 
-            if (m_state.items.Load(data, size))
+            if (m_state.items.Load(data, size)) {
+                m_state.items.SetHash(FileHash(data, size));
                 Log::Info("[Items] Loaded %zu items (items.dat version %d)", m_state.items.Count(),
                           m_state.items.Version());
+            }
             break;
         }
 

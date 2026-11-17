@@ -15,3 +15,10 @@ constexpr uint32 Hash(string_view text) {
 constexpr uint32 operator""_hash(const char* text, size_t length) {
     return Hash(string_view(text, length));
 }
+
+inline uint32 FileHash(const uint8* data, size_t size) {
+    uint32 hash = 0x55555555;
+    for (size_t i = 0; i < size; ++i)
+        hash = (hash >> 27) + (hash << 5) + data[i];
+    return hash;
+}
