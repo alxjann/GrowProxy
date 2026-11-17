@@ -21,6 +21,7 @@ enum Target { Client, Server };
 struct ProxySettings {
     bool longPunch = true;    // hold left shift for unlimited punch/build range, shift + click walks there
     bool infiniteZoom = true; // patches mstate|1 into the local player's OnSpawn
+    bool paintEntrances = false; // shows entrances painted in the game: green if you can pass, red if not
 };
 
 // One packet passing through the proxy, reported to the packet observer. data/size are only valid during the call.
@@ -115,6 +116,8 @@ private:
     void RunDueTasks();
     void UpdateLongPunch();
 
+    bool GetEntrancePaint(const Tile& tile, int x, int y, uint16& outFlags) const;
+
     const ServerData& m_serverData;
     GameState m_state;
     Commands m_commands;
@@ -134,6 +137,8 @@ private:
 
     bool m_redirecting = false;
     Endpoint m_redirectTarget;
+
+    int m_userID = -1;
 
     std::multimap<uint64, std::function<void()>> m_tasks; // by due time
 };

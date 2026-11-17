@@ -85,9 +85,11 @@ bool World::Load(const uint8* data, size_t size, const ItemDatabase& items) {
     r.Skip(4 + 1);
 
     m_tiles.resize(tileCount);
+    m_tileOffsets.resize(tileCount);
     for (uint32 i = 0; i < tileCount; ++i) {
         TileAccess access;
         bool hasAccess = false;
+        m_tileOffsets[i] = (uint32)r.Position();
         if (ReadTile(r, m_tiles[i], items, access, hasAccess)) {
             StoreAccess(i, m_tiles[i], std::move(access), hasAccess, items);
         } else {
@@ -150,6 +152,7 @@ void World::Clear() {
     m_name.clear();
     m_width = m_height = 0;
     m_tiles.clear();
+    m_tileOffsets.clear();
     m_droppedItems.clear();
     m_access.clear();
     m_worldLock = -1;
@@ -301,6 +304,25 @@ bool World::HasAccess(int x, int y, int userID) const {
 
     auto worldLock = m_worldLock >= 0 ? m_access.find(m_worldLock) : m_access.end();
     return worldLock != m_access.end() && userID > 0 && worldLock->second.owner == userID;
+}
+
+bool World::IsEntrance(const Item& item) {
+    return item.type == ITEM_TYPE_VIP_DOOR || item.type == ITEM_TYPE_FRIENDS_ENTRANCE ||
+           item.collisionType == COLLISION_GATEWAY || item.collisionType == COLLISION_VIP;
+}
+
+bool World::CanUseEntrance(int x, int y, int userID) const {
+    const Tile* tile = GetTile(x, y);
+    if (!tile)
+        return false;
+    if (tile->HasFlag(TILE_FLAG_IS_OPEN_TO_PUBLIC))
+        return true;
+
+    const TileAccess* own = GetAccess(x, y);
+    if (own && own->Allows(userID))
+        return true;
+
+    return HasAccess(x, y, userID);
 }
 
 Tile* World::GetTile(int x, int y) {

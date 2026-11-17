@@ -331,6 +331,9 @@ void ProxyUI::DrawWorldToolbar() {
     Widgets::SameLineIfFits(Widgets::SwitchWidth("No access"), spacing);
     Widgets::Switch("No access", &m_world.showAccess);
     Widgets::Tooltip("Tints tiles protected by a lock you don't have access to");
+    Widgets::SameLineIfFits(Widgets::SwitchWidth("Entrances"), spacing);
+    Widgets::Switch("Entrances", &m_world.showEntrances);
+    Widgets::Tooltip("Colors house, VIP and friends entrances: green if you can pass, red if you can't");
     Widgets::SameLineIfFits(Widgets::SwitchWidth("Tile info"), spacing);
     Widgets::Switch("Tile info", &m_world.showTileInfo);
     Widgets::Tooltip("Shows a tile's details while the mouse is over it");
@@ -461,6 +464,10 @@ void ProxyUI::DrawWorldMap(ImVec2 size) {
     const ImU32 backgroundColor = Theme::U32(Theme::Hex(0x1B2330));
     const ImU32 noAccess = Theme::U32(Theme::WithAlpha(Theme::Danger, 0.22f));
     const ImU32 lockOutline = Theme::U32(Theme::Hex(0xF5C542, 0.9f));
+    const ImU32 entranceOpen = Theme::U32(Theme::Hex(0x4ADE80, 0.95f));
+    const ImU32 entranceOpenFill = Theme::U32(Theme::Hex(0x4ADE80, 0.30f));
+    const ImU32 entranceClosed = Theme::U32(Theme::WithAlpha(Theme::Danger, 0.95f));
+    const ImU32 entranceClosedFill = Theme::U32(Theme::WithAlpha(Theme::Danger, 0.30f));
 
     // draws a sheet cell over the tile, mirrored for flipped tiles and multiplied by tint
     auto drawSprite = [&](const string& sheet, Vec2i cell, bool flipped, ImVec2 min, ImVec2 max,
@@ -566,6 +573,17 @@ void ProxyUI::DrawWorldMap(ImVec2 size) {
 
             if (m_world.showAccess && state.local.userID != -1 && !world.HasAccess(x, y, state.local.userID))
                 draw->AddRectFilled(min, max, noAccess);
+
+            if (m_world.showEntrances && t->foreground != 0) {
+                const Item* item = items.Get(t->foreground);
+                if (item && World::IsEntrance(*item)) {
+                    bool open = state.local.userID != -1 && world.CanUseEntrance(x, y, state.local.userID);
+                    draw->AddRectFilled(min, max, open ? entranceOpenFill : entranceClosedFill, rounding);
+                    if (tile >= 5.0f)
+                        draw->AddRect(min, max, open ? entranceOpen : entranceClosed, rounding, 0,
+                                      std::max(1.0f, tile * 0.08f));
+                }
+            }
         }
     }
 

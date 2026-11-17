@@ -23,17 +23,6 @@ namespace {
         RULE_LEFT_ONLY,  // one-way block facing left (flipped)
     };
 
-    bool CanUseEntrance(const World& world, const Tile& tile, int x, int y, int userID) {
-        if (tile.HasFlag(TILE_FLAG_IS_OPEN_TO_PUBLIC))
-            return true;
-
-        const TileAccess* own = world.GetAccess(x, y);
-        if (own && own->Allows(userID))
-            return true;
-
-        return world.HasAccess(x, y, userID);
-    }
-
     TileRule GetTileRule(const World& world, const ItemDatabase& items, int x, int y, int userID) {
         const Tile& tile = *world.GetTile(x, y);
         if (tile.foreground == 0)
@@ -44,7 +33,7 @@ namespace {
             return RULE_BLOCKED;
 
         if (item->type == ITEM_TYPE_VIP_DOOR || item->type == ITEM_TYPE_FRIENDS_ENTRANCE)
-            return CanUseEntrance(world, tile, x, y, userID) ? RULE_OPEN : RULE_BLOCKED;
+            return world.CanUseEntrance(x, y, userID) ? RULE_OPEN : RULE_BLOCKED;
 
         switch (item->collisionType) {
             case COLLISION_NONE:
@@ -55,7 +44,7 @@ namespace {
                 return RULE_NOT_DOWN;
             case COLLISION_GATEWAY:
             case COLLISION_VIP:
-                return CanUseEntrance(world, tile, x, y, userID) ? RULE_OPEN : RULE_BLOCKED;
+                return world.CanUseEntrance(x, y, userID) ? RULE_OPEN : RULE_BLOCKED;
             case COLLISION_IF_OFF:
                 return tile.HasFlag(TILE_FLAG_IS_ON) ? RULE_OPEN : RULE_BLOCKED;
             case COLLISION_ONE_WAY:

@@ -62,6 +62,7 @@ public:
 
     bool Ok() const { return m_ok; }
     size_t Remaining() const { return m_size - m_pos; }
+    size_t Position() const { return m_pos; }
 
 private:
     bool Has(size_t size) {

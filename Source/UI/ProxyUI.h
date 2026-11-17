@@ -82,6 +82,7 @@ private:
         bool showDropped = false;
         bool showPlayers = true;
         bool showAccess = false;
+        bool showEntrances = false; // colors house/VIP/friends entrances by whether you can pass
         bool showTileInfo = false; // hover tooltip
         int tab = 0; // 0 overview, 1 map
         int inspectorTab = 0; // 0 players, 1 floating, 2 blocks

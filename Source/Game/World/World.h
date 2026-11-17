@@ -8,6 +8,7 @@
 
 class ByteReader;
 class ItemDatabase;
+struct Item;
 
 enum TileFlag : uint16 {
     TILE_FLAG_HAS_EXTRA_DATA = 1 << 0,
@@ -27,6 +28,11 @@ enum TileFlag : uint16 {
     TILE_FLAG_PAINTED_GREEN = 1 << 14,
     TILE_FLAG_PAINTED_BLUE = 1 << 15,
 };
+
+// Where a tile's flags are in its serialized data (after foreground, background and parent).
+constexpr size_t TILE_FLAGS_OFFSET = 6;
+
+constexpr uint16 TILE_PAINT_FLAGS = TILE_FLAG_PAINTED_RED | TILE_FLAG_PAINTED_GREEN | TILE_FLAG_PAINTED_BLUE;
 
 struct Tile {
     uint16 foreground = 0;
@@ -70,6 +76,13 @@ public:
     // public, owned by them or lists them. Tiles that no lock protects are open to everyone.
     bool HasAccess(int x, int y, int userID) const;
 
+    // Blocks only players with access can pass: house/VIP/friends entrances and other gateways.
+    static bool IsEntrance(const Item& item);
+
+    // Whether a user can pass the entrance at (x, y): it is open to public, lists them in its own extra, or they
+    // have access to the area's lock.
+    bool CanUseEntrance(int x, int y, int userID) const;
+
     bool IsLoaded() const { return m_loaded; }
     const string& GetName() const { return m_name; }
     uint16 GetVersion() const { return m_version; }
@@ -82,6 +95,9 @@ public:
     const Tile* GetTile(int x, int y) const { return const_cast<World*>(this)->GetTile(x, y); }
     std::vector<Tile>& GetTiles() { return m_tiles; }
     const std::vector<Tile>& GetTiles() const { return m_tiles; }
+
+    // Where tile `index` starts in the data last passed to Load(), so the map data can be edited in place.
+    size_t GetTileDataOffset(size_t index) const { return index < m_tileOffsets.size() ? m_tileOffsets[index] : 0; }
 
     std::vector<DroppedItem>& GetDroppedItems() { return m_droppedItems; }
     const std::vector<DroppedItem>& GetDroppedItems() const { return m_droppedItems; }
@@ -100,6 +116,7 @@ private:
     int32 m_width = 0;
     int32 m_height = 0;
     std::vector<Tile> m_tiles;
+    std::vector<uint32> m_tileOffsets; // see GetTileDataOffset
     std::vector<DroppedItem> m_droppedItems;
     std::unordered_map<int, TileAccess> m_access;    // by tile index
     int m_worldLock = -1;                             // tile index of the world lock, -1 if none

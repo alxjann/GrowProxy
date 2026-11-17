@@ -99,6 +99,13 @@ void ProxyUI::DrawFeatures() {
         Log::Info("[UI] Infinite zoom %s", settings.infiniteZoom ? "enabled" : "disabled");
 
     ImGui::Dummy(ImVec2(0, 4.0f * Scale()));
+    if (Widgets::ToggleRow("##paint_entrances", "Paint entrances",
+                           "Shows house, VIP and friends entrances painted in the game: green if you can pass, red if "
+                           "you can't. Only you see it. Applies when you next enter a world.",
+                           &settings.paintEntrances))
+        Log::Info("[UI] Paint entrances %s", settings.paintEntrances ? "enabled" : "disabled");
+
+    ImGui::Dummy(ImVec2(0, 4.0f * Scale()));
     bool inWorld = m_proxy.IsClientConnected() && state.world.IsLoaded();
     bool antigravity = state.antigravityEnabled;
     ImGui::BeginDisabled(!inWorld);

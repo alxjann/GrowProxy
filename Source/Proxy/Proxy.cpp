@@ -231,6 +231,9 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                     Log::Info("[Proxy] Server is moving the client to %s:%d", ip.c_str(), port);
                     RedirectNextConnection({ip, port});
 
+                    if (int userID = call.GetInt(3); userID > 0)
+                        m_userID = userID;
+
                     call[1] = Config::LOCAL_ENET_PORT;
                     call[4] = Config::LOCAL_HOST + rest;
 
@@ -261,6 +264,8 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
                             m_state.local.netID = player.netID;
                             m_state.local.userID = player.userID;
                             m_state.local.name = player.name;
+                            if (player.userID > 0)
+                                m_userID = player.userID;
                         }
                         m_state.players[player.netID] = player;
                     }
@@ -357,9 +362,35 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
 
         case PACKET_SEND_MAP_DATA: {
             m_state.ClearPlayers();
-            if (extra && m_state.world.Load(extra, game.extraDataSize, m_state.items))
-                Log::Info("[World] Entered %s", m_state.world.GetName().c_str());
-            break;
+            if (!extra || !m_state.world.Load(extra, game.extraDataSize, m_state.items))
+                break;
+            Log::Info("[World] Entered %s", m_state.world.GetName().c_str());
+
+            if (!m_settings.paintEntrances)
+                break;
+
+            // Paint the entrances
+            const World& world = m_state.world;
+            const std::vector<Tile>& tiles = world.GetTiles();
+            const size_t extraStart = (size_t)(extra - packet.data);
+            std::vector<uint8> patched;
+            for (size_t i = 0; i < tiles.size(); ++i) {
+                uint16 flags;
+                int x = (int)(i % world.GetWidth());
+                int y = (int)(i / world.GetWidth());
+                if (!GetEntrancePaint(tiles[i], x, y, flags) || flags == tiles[i].flags)
+                    continue;
+
+                if (patched.empty())
+                    patched.assign(packet.data, packet.data + packet.size);
+                std::memcpy(patched.data() + extraStart + world.GetTileDataOffset(i) + TILE_FLAGS_OFFSET, &flags,
+                            sizeof(flags));
+            }
+
+            if (patched.empty())
+                break;
+            SendOwnPacket(Client, patched);
+            return false;
         }
 
         case PACKET_STATE: {
@@ -409,9 +440,20 @@ bool Proxy::OnPacketFromServer(const PacketView& packet) {
         }
 
         case PACKET_SEND_TILE_UPDATE_DATA: {
-            if (extra)
-                m_state.world.UpdateTile(game.tileX, game.tileY, extra, game.extraDataSize, m_state.items);
-            break;
+            if (!extra || !m_state.world.UpdateTile(game.tileX, game.tileY, extra, game.extraDataSize, m_state.items))
+                break;
+
+            // paint a newly placed or updated entrance
+            const Tile* tile = m_state.world.GetTile(game.tileX, game.tileY);
+            uint16 flags;
+            if (!m_settings.paintEntrances || !tile || game.extraDataSize < TILE_FLAGS_OFFSET + sizeof(flags) ||
+                !GetEntrancePaint(*tile, game.tileX, game.tileY, flags) || flags == tile->flags)
+                break;
+
+            std::vector<uint8> patched(packet.data, packet.data + packet.size);
+            std::memcpy(patched.data() + (extra - packet.data) + TILE_FLAGS_OFFSET, &flags, sizeof(flags));
+            SendOwnPacket(Client, patched);
+            return false;
         }
 
         // a lock at (tileX, tileY) claimed an area; the extra data lists the tile indices (uint16 each)
@@ -625,6 +667,16 @@ void Proxy::UpdateLongPunch() {
         Send(Client, local.SetLongPunch(wanted));
 }
 
+bool Proxy::GetEntrancePaint(const Tile& tile, int x, int y, uint16& outFlags) const {
+    const Item* item = tile.foreground != 0 ? m_state.items.Get(tile.foreground) : nullptr;
+    if (!item || !World::IsEntrance(*item))
+        return false;
+
+    bool canPass = m_state.world.CanUseEntrance(x, y, m_userID);
+    outFlags = (tile.flags & ~TILE_PAINT_FLAGS) | (canPass ? TILE_FLAG_PAINTED_GREEN : TILE_FLAG_PAINTED_RED);
+    return true;
+}
+
 void Proxy::HandleClientEvent(ENetEvent& event) {
     switch (event.type) {
         case ENET_EVENT_TYPE_CONNECT: {
@@ -670,6 +722,7 @@ void Proxy::HandleClientEvent(ENetEvent& event) {
                 Log::Info("[Proxy] Client is switching servers");
             } else {
                 Log::Warn("[Proxy] Client disconnected");
+                m_userID = -1; // the next login may be another account
                 CloseServerConnection();
             }
             break;
