@@ -1,6 +1,7 @@
 #pragma once
 
-#include "Features/Commands.h"
+#include "Features/Commands/Commands.h"
+#include "Features/Functions/Functions.h"
 #include "Game/GameState.h"
 #include "Network/ServerData/ServerData.h"
 #include "Packets/Packets/Packets.h"
@@ -69,7 +70,7 @@ public:
 
     GameState& State() { return m_state; }
     const GameState& State() const { return m_state; }
-    Commands& GetCommands() { return m_commands; }
+    Function& GetFunction() { return m_function; }
     ProxySettings& Settings() { return m_settings; }
 
     bool IsClientConnected() const { return m_client != nullptr; }
@@ -120,6 +121,7 @@ private:
 
     const ServerData& m_serverData;
     GameState m_state;
+    Function m_function;
     Commands m_commands;
     ProxySettings m_settings;
     std::function<void(const PacketEvent&)> m_observer;

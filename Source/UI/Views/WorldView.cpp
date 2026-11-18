@@ -862,7 +862,7 @@ void ProxyUI::DrawFloatingList() {
         ListRow(id, title, detail, reserve);
         ImGui::BeginDisabled(!m_proxy.IsClientConnected());
         if (Widgets::IconButton(id, ICON_FA_LOCATION_CROSSHAIRS, "Point the in-game arrow at this item", Theme::Warning))
-            m_proxy.GetCommands().PointToItem(itemID);
+            m_proxy.GetFunction().PointToItem(itemID);
         ImGui::EndDisabled();
     }
     if (!any)

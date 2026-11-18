@@ -1,8 +1,6 @@
-#include "Features/Commands.h"
+#include "Features/Functions/Functions.h"
 
 #include "Proxy/Proxy.h"
-#include "Packets/TextPacket/TextPacket.h"
-#include "Utils/Strings/Strings.h"
 
 #include <map>
 
@@ -40,34 +38,7 @@ namespace {
 
 }
 
-bool Commands::HandleChat(string_view text) {
-    text = Strings::Trim(text);
-    if (text.empty() || text[0] != '/')
-        return false;
-
-    // "/name arguments"
-    size_t space = text.find(' ');
-    string name = Strings::ToLower(text.substr(1, space == string_view::npos ? string_view::npos : space - 1));
-    string_view args = space == string_view::npos ? string_view() : Strings::Trim(text.substr(space + 1));
-
-    if (name == "warp")
-        return Warp(args);
-
-    if (name == "growscan" || name == "gscan" || name == "gs") {
-        m_proxy.ConsoleMessage("`6" + string(text));
-        Growscan();
-        return true;
-    }
-
-    if (name == "antigravity" || name == "ag") {
-        ToggleAntigravity();
-        return true;
-    }
-
-    return false;
-}
-
-bool Commands::Warp(string_view world) {
+bool Function::Warp(string_view world) {
     if (world.empty())
         return false;
 
@@ -76,7 +47,7 @@ bool Commands::Warp(string_view world) {
     return true;
 }
 
-void Commands::Growscan() {
+void Function::Growscan() {
     m_proxy.ShowDialog("set_default_color|`o"
                        "\nadd_label_with_icon|big|`9Growscan|left|6016|"
                        "\nadd_spacer|small|"
@@ -85,7 +56,7 @@ void Commands::Growscan() {
                        string(DIALOG_END) + "\nend_dialog|growscan_dialog|Close||");
 }
 
-void Commands::ToggleAntigravity() {
+void Function::ToggleAntigravity() {
     GameState& state = m_proxy.State();
 
     if (state.antigravityEnabled) {
@@ -118,41 +89,7 @@ void Commands::ToggleAntigravity() {
     });
 }
 
-void Commands::PointToItem(int32 itemID) {
-    if (itemID <= 0)
-        return;
-
-    GameUpdatePacket arrow;
-    arrow.type = PACKET_ACTIVE_ARROW_TO_ITEM;
-    arrow.byte1 = 1;
-    arrow.netID = itemID;
-    m_proxy.Send(Client, arrow);
-}
-
-bool Commands::HandleDialogReturn(const TextPacket& packet) {
-    string_view button = packet.Get("buttonClicked");
-
-    if (button == "gscan_block") {
-        ShowWorldBlocks();
-        return true;
-    }
-    if (button == "gscan_float") {
-        ShowDroppedItems();
-        return true;
-    }
-
-    // item buttons in the floating items list: point the arrow at the item
-    for (string_view prefix : {string_view("floating_"), string_view("findObject_")}) {
-        if (Strings::StartsWith(button, prefix)) {
-            PointToItem(Strings::ToInt(button.substr(prefix.size())).value_or(0));
-            return true;
-        }
-    }
-
-    return Strings::StartsWith(packet.Get("dialog_name"), "growscan");
-}
-
-void Commands::ShowWorldBlocks() {
+void Function::ShowWorldBlocks() {
     GameState& state = m_proxy.State();
     if (!state.world.IsLoaded()) {
         m_proxy.ConsoleMessage("`4You must be in a world to scan world blocks!");
@@ -181,7 +118,7 @@ void Commands::ShowWorldBlocks() {
                        list + DIALOG_END + "\nend_dialog|growscan_dialog|Close||");
 }
 
-void Commands::ShowDroppedItems() {
+void Function::ShowDroppedItems() {
     GameState& state = m_proxy.State();
     if (!state.world.IsLoaded()) {
         m_proxy.ConsoleMessage("`4You must be in a world to scan floating items!");
@@ -209,4 +146,15 @@ void Commands::ShowDroppedItems() {
                        "\nadd_textbox|Press on the icon to be directed to the location of the item.|left|"
                        "\nadd_spacer|small|" +
                        list + DIALOG_END + "\nend_dialog|growscan_dialog|Cancel|Okay|");
+}
+
+void Function::PointToItem(int32 itemID) {
+    if (itemID <= 0)
+        return;
+
+    GameUpdatePacket arrow;
+    arrow.type = PACKET_ACTIVE_ARROW_TO_ITEM;
+    arrow.byte1 = 1;
+    arrow.netID = itemID;
+    m_proxy.Send(Client, arrow);
 }

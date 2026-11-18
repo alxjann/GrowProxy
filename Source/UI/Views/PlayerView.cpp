@@ -74,7 +74,7 @@ void ProxyUI::DrawPlayerOverview() {
     submit |= Widgets::Button("Warp", Widgets::ButtonKind::Primary, ImVec2(buttonWidth, 0));
     ImGui::EndDisabled();
     if (submit && m_warpWorld[0] != '\0') {
-        m_proxy.GetCommands().Warp(m_warpWorld);
+        m_proxy.GetFunction().Warp(m_warpWorld);
         Log::Info("[UI] Warping to %s", m_warpWorld);
     }
     if (!online)
@@ -111,7 +111,7 @@ void ProxyUI::DrawFeatures() {
     ImGui::BeginDisabled(!inWorld);
     if (Widgets::ToggleRow("##antigravity", "Antigravity", "Client-side antigravity generator. Same as /antigravity.",
                            &antigravity))
-        m_proxy.GetCommands().ToggleAntigravity();
+        m_proxy.GetFunction().ToggleAntigravity();
     ImGui::EndDisabled();
 
     Widgets::EndCard();

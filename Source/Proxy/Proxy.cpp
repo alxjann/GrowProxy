@@ -89,7 +89,11 @@ namespace {
 
 }
 
-Proxy::Proxy(const ServerData& serverData) : m_serverData(serverData), m_commands(*this) {}
+Proxy::Proxy(const ServerData& serverData)
+    : m_serverData(serverData),
+      m_function(*this),
+      m_commands(*this)
+{}
 
 Proxy::~Proxy() {
     Stop();
