@@ -1,9 +1,9 @@
-#include "Network/ServerData.h"
+#include "Network/ServerData/ServerData.h"
 
 #include "Core/Config.h"
 #include "Core/Log.h"
-#include "Network/Http.h"
-#include "Utils/Strings.h"
+#include "Network/Http/Http.h"
+#include "Utils/Strings/Strings.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>

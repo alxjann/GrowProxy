@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Types.h"
-#include "UI/Theme.h"
+#include "UI/Theme/Theme.h"
 
 #include <imgui.h>
 

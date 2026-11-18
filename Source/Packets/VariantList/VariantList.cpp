@@ -1,4 +1,4 @@
-#include "Packets/VariantList.h"
+#include "Packets/VariantList/VariantList.h"
 
 #include "Utils/ByteReader.h"
 

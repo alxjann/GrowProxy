@@ -1,9 +1,9 @@
-#include "UI/ProxyUI.h"
+#include "UI/ProxyUI/ProxyUI.h"
 
 #include "Core/Config.h"
 #include "Proxy/Proxy.h"
 #include "UI/Icons.h"
-#include "UI/Widgets.h"
+#include "UI/Widgets/Widgets.h"
 
 namespace {
 

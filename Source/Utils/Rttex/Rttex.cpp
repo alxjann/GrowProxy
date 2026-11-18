@@ -1,7 +1,7 @@
-#include "Utils/Rttex.h"
+#include "Utils/Rttex/Rttex.h"
 
 #include "Utils/ByteReader.h"
-#include "Utils/Zlib.h"
+#include "Utils/Zlib/Zlib.h"
 
 #include <cstring>
 

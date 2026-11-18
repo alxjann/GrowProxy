@@ -2,12 +2,12 @@
 #include "Core/Log.h"
 #include "Core/Platform.h"
 #include "Proxy/Proxy.h"
-#include "Network/DiscordPresence.h"
-#include "Network/Http.h"
-#include "Network/ServerData.h"
-#include "UI/PacketCapture.h"
-#include "UI/ProxyUI.h"
-#include "UI/Window.h"
+#include "Network/DiscordPresence/DiscordPresence.h"
+#include "Network/Http/Http.h"
+#include "Network/ServerData/ServerData.h"
+#include "UI/PacketCapture/PacketCapture.h"
+#include "UI/ProxyUI/ProxyUI.h"
+#include "UI/Window/Window.h"
 
 #include <enet/enet.h>
 #include <windows.h>

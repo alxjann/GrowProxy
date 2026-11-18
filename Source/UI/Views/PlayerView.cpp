@@ -1,8 +1,8 @@
-#include "UI/ProxyUI.h"
+#include "UI/ProxyUI/ProxyUI.h"
 
 #include "Proxy/Proxy.h"
 #include "UI/Icons.h"
-#include "UI/Widgets.h"
+#include "UI/Widgets/Widgets.h"
 
 #include <cmath>
 

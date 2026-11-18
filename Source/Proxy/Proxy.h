@@ -2,9 +2,9 @@
 
 #include "Features/Commands.h"
 #include "Game/GameState.h"
-#include "Network/ServerData.h"
-#include "Packets/Packets.h"
-#include "Packets/VariantList.h"
+#include "Network/ServerData/ServerData.h"
+#include "Packets/Packets/Packets.h"
+#include "Packets/VariantList/VariantList.h"
 
 #include <functional>
 #include <map>

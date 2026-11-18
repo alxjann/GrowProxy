@@ -1,7 +1,7 @@
-#include "UI/PacketCapture.h"
+#include "UI/PacketCapture/PacketCapture.h"
 
 #include "Core/Platform.h"
-#include "Packets/TextPacket.h"
+#include "Packets/TextPacket/TextPacket.h"
 
 #include <windows.h>
 

@@ -1,9 +1,9 @@
-#include "UI/ProxyUI.h"
+#include "UI/ProxyUI/ProxyUI.h"
 
 #include "Proxy/Proxy.h"
 #include "UI/Icons.h"
-#include "UI/Widgets.h"
-#include "Utils/Strings.h"
+#include "UI/Widgets/Widgets.h"
+#include "Utils/Strings/Strings.h"
 
 #include <imgui_internal.h>
 

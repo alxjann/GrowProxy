@@ -1,8 +1,8 @@
-#include "Network/Http.h"
+#include "Network/Http/Http.h"
 
 #include "Core/Log.h"
 #include "Core/Platform.h"
-#include "Utils/Strings.h"
+#include "Utils/Strings/Strings.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>

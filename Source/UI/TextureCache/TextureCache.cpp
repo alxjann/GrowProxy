@@ -1,7 +1,7 @@
-#include "UI/TextureCache.h"
+#include "UI/TextureCache/TextureCache.h"
 
 #include "Core/Log.h"
-#include "Utils/Rttex.h"
+#include "Utils/Rttex/Rttex.h"
 
 #include <windows.h>
 

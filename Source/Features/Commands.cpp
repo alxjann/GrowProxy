@@ -1,8 +1,8 @@
 #include "Features/Commands.h"
 
 #include "Proxy/Proxy.h"
-#include "Packets/TextPacket.h"
-#include "Utils/Strings.h"
+#include "Packets/TextPacket/TextPacket.h"
+#include "Utils/Strings/Strings.h"
 
 #include <map>
 

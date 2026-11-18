@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Types.h"
-#include "Packets/Packets.h"
+#include "Packets/Packets/Packets.h"
 
 struct Player {
     int netID = -1;

@@ -1,4 +1,4 @@
-#include "Network/DiscordPresence.h"
+#include "Network/DiscordPresence/DiscordPresence.h"
 
 #include "Core/Config.h"
 #include "Core/Log.h"

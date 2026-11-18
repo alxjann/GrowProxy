@@ -1,7 +1,7 @@
-#include "UI/Window.h"
+#include "UI/Window/Window.h"
 
 #include "Core/Log.h"
-#include "UI/Theme.h"
+#include "UI/Theme/Theme.h"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>

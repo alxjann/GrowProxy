@@ -1,4 +1,4 @@
-#include "Packets/TextPacket.h"
+#include "Packets/TextPacket/TextPacket.h"
 
 TextPacket::TextPacket(string_view text) : m_text(text) {
     string_view rest = m_text;

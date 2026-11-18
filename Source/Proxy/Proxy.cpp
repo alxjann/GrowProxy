@@ -5,10 +5,10 @@
 #include "Core/Platform.h"
 #include "Features/Pathfinding/Pathfinding.h"
 #include "Game/World/TileExtras.h"
-#include "Packets/TextPacket.h"
+#include "Packets/TextPacket/TextPacket.h"
 #include "Utils/Hash.h"
-#include "Utils/Strings.h"
-#include "Utils/Zlib.h"
+#include "Utils/Strings/Strings.h"
+#include "Utils/Zlib/Zlib.h"
 
 #include <enet/enet.h>
 #include <windows.h>
